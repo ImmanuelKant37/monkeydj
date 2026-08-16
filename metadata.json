@@ -1,0 +1,6 @@
+{
+  "name": "Monkey DJ - Sonido y Animacion",
+  "description": "Plataforma profesional MonkeyDJ para servicios de DJ, sonido, iluminación y producción de eventos en Concordia (Entre Ríos) y Posadas (Misiones).",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

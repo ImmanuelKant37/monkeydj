@@ -1,0 +1,302 @@
+import {
+  Branch,
+  ServiceItem,
+  PricingConfig,
+  Equipment,
+  Vehicle,
+  Staff,
+  Testimonial,
+  GalleryItem,
+  Customer,
+  EventRecord,
+  BookingRequest,
+  QuoteResult,
+  Coupon,
+  NotificationEmailConfig,
+  AuditLog,
+  ContactMessage,
+  EventProcedure,
+  SiteContent
+} from '../types';
+
+import {
+  INITIAL_BRANCHES,
+  INITIAL_SERVICES,
+  INITIAL_PACKAGES,
+  INITIAL_PRICING_CONFIG,
+  INITIAL_EQUIPMENT,
+  INITIAL_VEHICLES,
+  INITIAL_STAFF,
+  INITIAL_TESTIMONIALS,
+  INITIAL_GALLERY,
+  INITIAL_CUSTOMERS,
+  INITIAL_EVENTS,
+  INITIAL_BOOKINGS,
+  INITIAL_COUPONS,
+  INITIAL_NOTIFICATION_CONFIG,
+  INITIAL_MESSAGES,
+  INITIAL_PROCEDURES,
+  INITIAL_SITE_CONTENT
+} from '../data/initialData';
+
+import { SupabaseService } from './supabase';
+
+const STORAGE_KEYS = {
+  BRANCHES: 'aura_branches_v1',
+  SERVICES: 'aura_services_v1',
+  PRICING: 'aura_pricing_v1',
+  EQUIPMENT: 'aura_equipment_v1',
+  VEHICLES: 'aura_vehicles_v1',
+  STAFF: 'aura_staff_v1',
+  TESTIMONIALS: 'aura_testimonials_v1',
+  GALLERY: 'aura_gallery_v1',
+  CUSTOMERS: 'aura_customers_v1',
+  EVENTS: 'aura_events_v1',
+  BOOKINGS: 'aura_bookings_v1',
+  QUOTES: 'aura_quotes_v1',
+  COUPONS: 'aura_coupons_v1',
+  NOTIFICATIONS: 'aura_notifications_v1',
+  AUDIT_LOGS: 'aura_audit_logs_v1',
+  MESSAGES: 'aura_messages_v1',
+  PROCEDURES: 'aura_procedures_v1',
+  SITE_CONTENT: 'aura_site_content_v1'
+};
+
+function getItem<T>(key: string, fallback: T): T {
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return fallback;
+    return JSON.parse(raw);
+  } catch (e) {
+    return fallback;
+  }
+}
+
+function setItem<T>(key: string, val: T): void {
+  try {
+    localStorage.setItem(key, JSON.stringify(val));
+  } catch (e) {
+    console.error('LocalStorage write error', e);
+  }
+}
+
+export class AppStorage {
+  static initStorage(): void {
+    if (!localStorage.getItem(STORAGE_KEYS.BRANCHES)) {
+      setItem(STORAGE_KEYS.BRANCHES, INITIAL_BRANCHES);
+    }
+  }
+
+  static getPackages() {
+    return INITIAL_PACKAGES;
+  }
+
+  static getBranches(): Branch[] {
+    return getItem(STORAGE_KEYS.BRANCHES, INITIAL_BRANCHES);
+  }
+  static saveBranches(data: Branch[]): void {
+    setItem(STORAGE_KEYS.BRANCHES, data);
+    SupabaseService.saveEntity('branches', STORAGE_KEYS.BRANCHES, data);
+    this.addAuditLog('Sistema', 'Actualización de Sucursales', `${data.length} sucursales en total`);
+  }
+
+  static getServices(): ServiceItem[] {
+    return getItem(STORAGE_KEYS.SERVICES, INITIAL_SERVICES);
+  }
+  static saveServices(data: ServiceItem[]): void {
+    setItem(STORAGE_KEYS.SERVICES, data);
+    SupabaseService.saveEntity('services', STORAGE_KEYS.SERVICES, data);
+    this.addAuditLog('Admin', 'Actualización de Catálogo de Servicios', `${data.length} servicios`);
+  }
+
+  static getPricingConfig(): PricingConfig {
+    return getItem(STORAGE_KEYS.PRICING, INITIAL_PRICING_CONFIG);
+  }
+  static savePricingConfig(data: PricingConfig): void {
+    setItem(STORAGE_KEYS.PRICING, data);
+    this.addAuditLog('Admin', 'Configuración de Precios Modificada', 'Actualización de matriz tarifaria');
+  }
+
+  static getEquipment(): Equipment[] {
+    return getItem(STORAGE_KEYS.EQUIPMENT, INITIAL_EQUIPMENT);
+  }
+  static saveEquipment(data: Equipment[]): void {
+    setItem(STORAGE_KEYS.EQUIPMENT, data);
+    SupabaseService.saveEntity('equipment', STORAGE_KEYS.EQUIPMENT, data);
+  }
+
+  static getVehicles(): Vehicle[] {
+    return getItem(STORAGE_KEYS.VEHICLES, INITIAL_VEHICLES);
+  }
+  static saveVehicles(data: Vehicle[]): void {
+    setItem(STORAGE_KEYS.VEHICLES, data);
+  }
+
+  static getStaff(): Staff[] {
+    return getItem(STORAGE_KEYS.STAFF, INITIAL_STAFF);
+  }
+  static saveStaff(data: Staff[]): void {
+    setItem(STORAGE_KEYS.STAFF, data);
+  }
+
+  static getTestimonials(): Testimonial[] {
+    return getItem(STORAGE_KEYS.TESTIMONIALS, INITIAL_TESTIMONIALS);
+  }
+  static saveTestimonials(data: Testimonial[]): void {
+    setItem(STORAGE_KEYS.TESTIMONIALS, data);
+  }
+
+  static getGallery(): GalleryItem[] {
+    return getItem(STORAGE_KEYS.GALLERY, INITIAL_GALLERY);
+  }
+  static saveGallery(data: GalleryItem[]): void {
+    setItem(STORAGE_KEYS.GALLERY, data);
+  }
+
+  static getCustomers(): Customer[] {
+    return getItem(STORAGE_KEYS.CUSTOMERS, INITIAL_CUSTOMERS);
+  }
+  static saveCustomers(data: Customer[]): void {
+    setItem(STORAGE_KEYS.CUSTOMERS, data);
+    SupabaseService.saveEntity('customers', STORAGE_KEYS.CUSTOMERS, data);
+  }
+
+  static getEvents(): EventRecord[] {
+    return getItem(STORAGE_KEYS.EVENTS, INITIAL_EVENTS);
+  }
+  static saveEvents(data: EventRecord[]): void {
+    setItem(STORAGE_KEYS.EVENTS, data);
+    SupabaseService.saveEntity('events', STORAGE_KEYS.EVENTS, data);
+  }
+
+  static getBookings(): BookingRequest[] {
+    return getItem(STORAGE_KEYS.BOOKINGS, INITIAL_BOOKINGS);
+  }
+  static saveBookings(data: BookingRequest[]): void {
+    setItem(STORAGE_KEYS.BOOKINGS, data);
+    SupabaseService.saveEntity('bookings', STORAGE_KEYS.BOOKINGS, data);
+  }
+
+
+  static getQuotes(): QuoteResult[] {
+    return getItem(STORAGE_KEYS.QUOTES, []);
+  }
+  static saveQuote(quote: QuoteResult): void {
+    const list = this.getQuotes();
+    list.unshift(quote);
+    setItem(STORAGE_KEYS.QUOTES, list);
+    this.addAuditLog('Cliente', 'Nuevo Presupuesto Generado', `Presupuesto N° ${quote.quoteNumber} - Total $${quote.total}`);
+  }
+
+  static getMessages(): ContactMessage[] {
+    return getItem(STORAGE_KEYS.MESSAGES, INITIAL_MESSAGES);
+  }
+  static saveMessages(data: ContactMessage[]): void {
+    setItem(STORAGE_KEYS.MESSAGES, data);
+    SupabaseService.saveEntity('messages', STORAGE_KEYS.MESSAGES, data);
+  }
+  static addMessage(msg: Partial<ContactMessage>): ContactMessage {
+    const list = this.getMessages();
+    const newMsg: ContactMessage = {
+      id: `msg-${Date.now()}`,
+      name: msg.name || 'Cliente Web',
+      email: msg.email || '',
+      phone: msg.phone || '',
+      subject: msg.subject || 'Consulta Web',
+      message: msg.message || '',
+      date: new Date().toISOString().slice(0, 16).replace('T', ' '),
+      branchId: msg.branchId || 'all',
+      status: 'Nuevo',
+      eventType: msg.eventType || 'Otro',
+      source: msg.source || 'Formulario Web'
+    };
+    const updated = [newMsg, ...list];
+    this.saveMessages(updated);
+    this.addAuditLog('Cliente', 'Nuevo Mensaje de Contacto', `De ${newMsg.name} (${newMsg.email})`);
+    return newMsg;
+  }
+
+  static getCoupons(): Coupon[] {
+    return getItem(STORAGE_KEYS.COUPONS, INITIAL_COUPONS);
+  }
+  static saveCoupons(data: Coupon[]): void {
+    setItem(STORAGE_KEYS.COUPONS, data);
+  }
+
+  static getNotificationConfig(): NotificationEmailConfig {
+    return getItem(STORAGE_KEYS.NOTIFICATIONS, INITIAL_NOTIFICATION_CONFIG);
+  }
+  static saveNotificationConfig(data: NotificationEmailConfig): void {
+    setItem(STORAGE_KEYS.NOTIFICATIONS, data);
+  }
+
+  static getAuditLogs(): AuditLog[] {
+    return getItem(STORAGE_KEYS.AUDIT_LOGS, [
+      {
+        id: 'log-1',
+        timestamp: new Date().toISOString(),
+        userRole: 'Sistema',
+        userName: 'Aura Core',
+        action: 'Sistema Inicializado',
+        details: 'Plataforma lista con configuración multi-sucursal'
+      }
+    ]);
+  }
+
+  static addAuditLog(role: string, action: string, details: string): void {
+    const logs = this.getAuditLogs();
+    const newLog: AuditLog = {
+      id: `log-${Date.now()}`,
+      timestamp: new Date().toISOString(),
+      userRole: role,
+      userName: role === 'Admin' ? 'Administrador' : role === 'Cliente' ? 'Usuario Web' : 'Operador',
+      action,
+      details
+    };
+    logs.unshift(newLog);
+    setItem(STORAGE_KEYS.AUDIT_LOGS, logs.slice(0, 100)); // Keep last 100
+  }
+
+  // Double booking & availability check
+  static checkAvailability(dateStr: string, branchId: string): { available: boolean; conflictReason?: string } {
+    const events = this.getEvents();
+    const bookings = this.getBookings();
+
+    const confirmedEventsSameDate = events.filter(
+      (e) => e.eventDate === dateStr && e.branchId === branchId && e.status !== 'Cancelado'
+    );
+
+    const approvedBookingsSameDate = bookings.filter(
+      (b) => b.eventDate === dateStr && b.branchId === branchId && (b.status === 'Aprobada' || b.status === 'Pendiente')
+    );
+
+    // Limit per branch per date e.g. max 3 concurrent events
+    if (confirmedEventsSameDate.length >= 3) {
+      return {
+        available: false,
+        conflictReason: `La sucursal seleccionada ya posee ${confirmedEventsSameDate.length} eventos confirmados para esta fecha (capacidad máxima alcanzada).`
+      };
+    }
+
+    return { available: true };
+  }
+
+  // Event Procedures & Timeline Protocols
+  static getProcedures(): EventProcedure[] {
+    return getItem(STORAGE_KEYS.PROCEDURES, INITIAL_PROCEDURES);
+  }
+
+  static saveProcedures(data: EventProcedure[]): void {
+    setItem(STORAGE_KEYS.PROCEDURES, data);
+  }
+
+  // Public Landing & Site Content Customizer
+  static getSiteContent(): SiteContent {
+    return getItem(STORAGE_KEYS.SITE_CONTENT, INITIAL_SITE_CONTENT);
+  }
+
+  static saveSiteContent(data: SiteContent): void {
+    setItem(STORAGE_KEYS.SITE_CONTENT, data);
+    this.addAuditLog('Sistema', 'Actualización de Textos Landing Page', 'Textos e itinerarios de portada actualizados');
+  }
+}
