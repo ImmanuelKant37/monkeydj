@@ -9,8 +9,34 @@ interface AdminLockGuardProps {
 }
 
 export const AdminLockGuard: React.FC<AdminLockGuardProps> = ({ children, onExitAdmin }) => {
-  const [userEmail, setUserEmail] = useState<string | null>(null);
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
+  const [userEmail, setUserEmail] = useState<string | null>(() => {
+    const storedEmail = localStorage.getItem('monkeydj_user_email');
+    if (storedEmail) return storedEmail;
+    const savedAdmin = localStorage.getItem('monkeydj_admin_session_v1');
+    if (savedAdmin) {
+      try {
+        return JSON.parse(savedAdmin)?.email || null;
+      } catch {
+        return null;
+      }
+    }
+    return null;
+  });
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
+    const storedEmail = localStorage.getItem('monkeydj_user_email');
+    const storedRole = localStorage.getItem('monkeydj_user_role');
+    if (storedEmail === 'fecsoul@gmail.com' || storedRole === 'admin') return true;
+    const savedAdmin = localStorage.getItem('monkeydj_admin_session_v1');
+    if (savedAdmin) {
+      try {
+        const parsed = JSON.parse(savedAdmin);
+        return Boolean(parsed?.email);
+      } catch {
+        return false;
+      }
+    }
+    return false;
+  });
   const [inputEmail, setInputEmail] = useState('');
   const [inputPassword, setInputPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -19,8 +45,11 @@ export const AdminLockGuard: React.FC<AdminLockGuardProps> = ({ children, onExit
 
   // Check stored auth session on load
   useEffect(() => {
+    const storedEmail = localStorage.getItem('monkeydj_user_email');
     const savedAdmin = localStorage.getItem('monkeydj_admin_session_v1');
-    if (savedAdmin) {
+    if (storedEmail) {
+      verifyEmailAndUnlock(storedEmail, true);
+    } else if (savedAdmin) {
       try {
         const parsed = JSON.parse(savedAdmin);
         if (parsed && parsed.email) {

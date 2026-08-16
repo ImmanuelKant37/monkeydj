@@ -43,14 +43,8 @@ import { SupabaseService, supabase } from './services/supabase';
 import { QuoteResult, BookingRequest, Testimonial, Branch, ServicePackage, Equipment, ServiceItem } from './types';
 
 export function App() {
-  // Navigation & Role State
-  const [activeView, setActiveView] = useState<'public' | 'client' | 'admin'>(() => {
-    const storedRole = localStorage.getItem('monkeydj_user_role');
-    const storedEmail = localStorage.getItem('monkeydj_user_email');
-    if (storedRole === 'admin' || storedEmail === 'fecsoul@gmail.com') return 'admin';
-    if (storedRole === 'client') return 'client';
-    return 'public';
-  });
+  // Navigation & Role State (Default to public landing page on initial load)
+  const [activeView, setActiveView] = useState<'public' | 'client' | 'admin'>('public');
   const [portalMode, setPortalMode] = useState<'public' | 'client' | 'admin'>(() => {
     const storedRole = localStorage.getItem('monkeydj_user_role');
     const storedEmail = localStorage.getItem('monkeydj_user_email');
@@ -134,12 +128,16 @@ export function App() {
         setCurrentUserRole(role);
         localStorage.setItem('monkeydj_user_email', email);
         localStorage.setItem('monkeydj_user_role', role);
-        if (role === 'admin') {
-          setActiveView('admin');
-          setPortalMode('admin');
+        if (event === 'SIGNED_IN') {
+          if (role === 'admin') {
+            setActiveView('admin');
+            setPortalMode('admin');
+          } else {
+            setActiveView('client');
+            setPortalMode('client');
+          }
         } else {
-          setActiveView('client');
-          setPortalMode('client');
+          setPortalMode(role);
         }
       }
     });
