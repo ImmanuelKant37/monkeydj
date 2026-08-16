@@ -28,8 +28,9 @@ export const MonkeyLogo: React.FC<MonkeyLogoProps> = ({ className = 'w-9 h-9', s
             <stop offset="100%" stopColor="#c084fc" />
           </linearGradient>
           <linearGradient id="hpGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-            <stop offset="0%" stopColor="#38bdf8" />
-            <stop offset="100%" stopColor="#818cf8" />
+            <stop offset="0%" stopColor="#fef08a" />
+            <stop offset="50%" stopColor="#facc15" />
+            <stop offset="100%" stopColor="#eab308" />
           </linearGradient>
         </defs>
 

@@ -110,7 +110,7 @@ export function App() {
     setGallery(AppStorage.getGallery());
     setSiteContent(AppStorage.getSiteContent());
 
-    // Listen to Supabase OAuth changes
+    // Listen to Supabase OAuth changes (sync user state without forcing screen change)
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (event === 'SIGNED_OUT' || !session) {
         localStorage.removeItem('monkeydj_user_email');
@@ -128,17 +128,7 @@ export function App() {
         setCurrentUserRole(role);
         localStorage.setItem('monkeydj_user_email', email);
         localStorage.setItem('monkeydj_user_role', role);
-        if (event === 'SIGNED_IN') {
-          if (role === 'admin') {
-            setActiveView('admin');
-            setPortalMode('admin');
-          } else {
-            setActiveView('client');
-            setPortalMode('client');
-          }
-        } else {
-          setPortalMode(role);
-        }
+        setPortalMode(role);
       }
     });
 
