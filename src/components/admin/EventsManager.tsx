@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Calendar,
   Plus,
@@ -22,6 +22,14 @@ export const EventsManager: React.FC = () => {
   const [events, setEvents] = useState<EventRecord[]>(AppStorage.getEvents());
   const [editingEvent, setEditingEvent] = useState<EventRecord | null>(null);
   const [isNew, setIsNew] = useState<boolean>(false);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setEditingEvent(null);
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
@@ -198,13 +206,19 @@ export const EventsManager: React.FC = () => {
 
       {/* Edit / Create Event Modal */}
       {editingEvent && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md">
-          <div className="bg-slate-900 border border-purple-500/40 rounded-3xl max-w-2xl w-full p-6 text-white space-y-4 max-h-[90vh] overflow-y-auto">
+        <div
+          onClick={() => setEditingEvent(null)}
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md cursor-pointer"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="bg-slate-900 border border-purple-500/40 rounded-3xl max-w-2xl w-full p-6 text-white space-y-4 max-h-[90vh] overflow-y-auto cursor-default"
+          >
             <div className="flex items-center justify-between border-b border-slate-800 pb-3">
               <h3 className="font-extrabold text-lg">
                 {isNew ? 'Nuevo Evento' : `Editar ${editingEvent.eventNumber}`}
               </h3>
-              <button onClick={() => setEditingEvent(null)} className="text-slate-400 hover:text-white">
+              <button onClick={() => setEditingEvent(null)} className="text-slate-400 hover:text-white cursor-pointer">
                 <X className="w-5 h-5" />
               </button>
             </div>

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Package,
   Truck,
@@ -38,6 +38,19 @@ export const InventoryLogistics: React.FC = () => {
   // Equipment Form Modal
   const [isEquipmentModalOpen, setIsEquipmentModalOpen] = useState(false);
   const [editingEquipment, setEditingEquipment] = useState<Equipment | null>(null);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setIsEquipmentModalOpen(false);
+        setIsVehicleModalOpen(false);
+        setIsStaffModalOpen(false);
+        setDeleteTarget(null);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
   const [equipmentForm, setEquipmentForm] = useState<Partial<Equipment>>({
     name: '',
     category: 'Altavoces / Sonido',
@@ -657,8 +670,14 @@ export const InventoryLogistics: React.FC = () => {
 
       {/* --- EQUIPMENT MODAL (ADD / EDIT) --- */}
       {isEquipmentModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md animate-in fade-in">
-          <div className="bg-slate-900 border border-purple-500/40 rounded-3xl max-w-xl w-full p-6 text-white space-y-4 shadow-2xl relative">
+        <div
+          onClick={() => setIsEquipmentModalOpen(false)}
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md animate-in fade-in cursor-pointer"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="bg-slate-900 border border-purple-500/40 rounded-3xl max-w-xl w-full p-6 text-white space-y-4 shadow-2xl relative cursor-default"
+          >
             <div className="flex items-center justify-between pb-3 border-b border-slate-800">
               <h3 className="font-black text-base text-white flex items-center gap-2">
                 <Package className="w-5 h-5 text-purple-400" />
@@ -853,8 +872,14 @@ export const InventoryLogistics: React.FC = () => {
 
       {/* --- VEHICLE MODAL --- */}
       {isVehicleModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md animate-in fade-in">
-          <div className="bg-slate-900 border border-purple-500/40 rounded-3xl max-w-md w-full p-6 text-white space-y-4 shadow-2xl relative">
+        <div
+          onClick={() => setIsVehicleModalOpen(false)}
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md animate-in fade-in cursor-pointer"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="bg-slate-900 border border-purple-500/40 rounded-3xl max-w-md w-full p-6 text-white space-y-4 shadow-2xl relative cursor-default"
+          >
             <div className="flex items-center justify-between pb-3 border-b border-slate-800">
               <h3 className="font-black text-base text-white">
                 {editingVehicle ? 'EDITAR VEHÍCULO' : 'NUEVO VEHÍCULO'}
@@ -925,8 +950,14 @@ export const InventoryLogistics: React.FC = () => {
 
       {/* --- STAFF MODAL --- */}
       {isStaffModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md animate-in fade-in">
-          <div className="bg-slate-900 border border-purple-500/40 rounded-3xl max-w-md w-full p-6 text-white space-y-4 shadow-2xl relative">
+        <div
+          onClick={() => setIsStaffModalOpen(false)}
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md animate-in fade-in cursor-pointer"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="bg-slate-900 border border-purple-500/40 rounded-3xl max-w-md w-full p-6 text-white space-y-4 shadow-2xl relative cursor-default"
+          >
             <div className="flex items-center justify-between pb-3 border-b border-slate-800">
               <h3 className="font-black text-base text-white">
                 {editingStaff ? 'EDITAR STAFF' : 'REGISTRAR STAFF'}
@@ -1002,8 +1033,14 @@ export const InventoryLogistics: React.FC = () => {
 
       {/* --- DELETE CONFIRMATION MODAL --- */}
       {deleteTarget && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-in fade-in">
-          <div className="bg-slate-900 border border-rose-500/40 rounded-3xl p-6 max-w-sm w-full text-center space-y-4 shadow-2xl">
+        <div
+          onClick={() => setDeleteTarget(null)}
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md animate-in fade-in cursor-pointer"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="bg-slate-900 border border-rose-500/40 rounded-3xl p-6 max-w-sm w-full text-center space-y-4 shadow-2xl cursor-default"
+          >
             <div className="w-12 h-12 rounded-full bg-rose-500/20 text-rose-400 flex items-center justify-center mx-auto">
               <Trash2 className="w-6 h-6" />
             </div>

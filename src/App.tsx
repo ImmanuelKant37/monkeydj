@@ -233,6 +233,7 @@ export function App() {
             <Hero
               branch={currentBranch}
               siteContent={siteContent}
+              gallery={branchGallery}
               onOpenQuote={() => setQuoteModalOpen(true)}
               onOpenServices={() => {
                 const el = document.getElementById('servicios');

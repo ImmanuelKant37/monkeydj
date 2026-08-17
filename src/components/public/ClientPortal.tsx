@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   User,
   FileText,
@@ -74,6 +74,16 @@ export const ClientPortal: React.FC = () => {
 
   // Selected event for digital signature modal
   const [signingEvent, setSigningEvent] = useState<EventRecord | null>(null);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setSigningEvent(null);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [isDrawing, setIsDrawing] = useState(false);
   const [signedSuccess, setSignedSuccess] = useState(false);
@@ -461,8 +471,14 @@ export const ClientPortal: React.FC = () => {
 
       {/* Digital Signature Canvas Modal */}
       {signingEvent && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-md">
-          <div className="bg-slate-900 border border-purple-500/40 rounded-3xl p-6 max-w-lg w-full text-white space-y-5">
+        <div
+          onClick={() => setSigningEvent(null)}
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-md animate-in fade-in cursor-pointer"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="bg-slate-900 border border-purple-500/40 rounded-3xl p-6 max-w-lg w-full text-white space-y-5 cursor-default"
+          >
             <div className="flex items-center justify-between border-b border-slate-800 pb-3">
               <div>
                 <h3 className="font-bold text-lg text-white">Firma Digital del Contrato</h3>
@@ -470,7 +486,7 @@ export const ClientPortal: React.FC = () => {
               </div>
               <button
                 onClick={() => setSigningEvent(null)}
-                className="text-slate-400 hover:text-white"
+                className="p-1.5 rounded-full bg-slate-800 text-slate-400 hover:text-white cursor-pointer"
               >
                 ✕
               </button>

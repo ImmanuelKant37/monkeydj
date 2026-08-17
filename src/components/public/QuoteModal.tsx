@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { X, Calculator } from 'lucide-react';
 import { QuoteCalculator } from './QuoteCalculator';
 import { Branch, ServiceItem, Equipment, QuoteResult } from '../../types';
@@ -22,11 +22,26 @@ export const QuoteModal: React.FC<QuoteModalProps> = ({
   onRequestBooking,
   onBookNow
 }) => {
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, onClose]);
+
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-slate-950/85 backdrop-blur-md overflow-y-auto animate-in fade-in font-sans">
-      <div className="bg-slate-900 border border-purple-500/40 rounded-3xl max-w-5xl w-full p-4 sm:p-8 text-white relative shadow-2xl my-auto max-h-[92vh] flex flex-col">
+    <div
+      onClick={onClose}
+      className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-slate-950/85 backdrop-blur-md overflow-y-auto animate-in fade-in font-sans cursor-pointer"
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="bg-slate-900 border border-purple-500/40 rounded-3xl max-w-5xl w-full p-4 sm:p-8 text-white relative shadow-2xl my-auto max-h-[92vh] flex flex-col cursor-default"
+      >
         {/* Header bar */}
         <div className="flex items-center justify-between pb-4 border-b border-slate-800 shrink-0 mb-4">
           <div className="flex items-center gap-3">

@@ -91,6 +91,16 @@ export const QuoteCalculator: React.FC<QuoteCalculatorProps> = ({
   const [userEmailInput, setUserEmailInput] = useState<string>('');
   const [emailSentSuccess, setEmailSentSuccess] = useState<boolean>(false);
 
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setEmailModalOpen(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
   // Preselect incoming service if requested
   useEffect(() => {
     if (preselectedServiceId && !selectedServices.includes(preselectedServiceId)) {
@@ -523,8 +533,14 @@ export const QuoteCalculator: React.FC<QuoteCalculatorProps> = ({
 
       {/* Email Modal */}
       {emailModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md">
-          <div className="bg-slate-900 border border-purple-500/30 rounded-3xl p-6 max-w-md w-full text-white space-y-4">
+        <div
+          onClick={() => setEmailModalOpen(false)}
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md animate-in fade-in cursor-pointer"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="bg-slate-900 border border-purple-500/30 rounded-3xl p-6 max-w-md w-full text-white space-y-4 cursor-default"
+          >
             <h3 className="font-bold text-lg text-white">Enviar Presupuesto por Correo</h3>
             <p className="text-xs text-slate-300">
               Ingresa tu correo electrónico para recibir el presupuesto oficial en tu bandeja de entrada:

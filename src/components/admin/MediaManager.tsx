@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Sparkles,
   Plus,
@@ -34,6 +34,18 @@ export const MediaManager: React.FC<MediaManagerProps> = ({ onGalleryUpdated }) 
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [newTagText, setNewTagText] = useState('');
   const [successToast, setSuccessToast] = useState('');
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setEditingItem(null);
+        setIsCreating(false);
+        setDeleteConfirmId(null);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   const eventCategories: EventType[] = [
     'Casamiento',
@@ -392,8 +404,14 @@ export const MediaManager: React.FC<MediaManagerProps> = ({ onGalleryUpdated }) 
 
       {/* Delete Confirmation Modal */}
       {deleteConfirmId && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-in fade-in">
-          <div className="bg-slate-900 border border-rose-500/40 rounded-3xl p-6 max-w-sm w-full text-center space-y-4 shadow-2xl">
+        <div
+          onClick={() => setDeleteConfirmId(null)}
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-in fade-in cursor-pointer"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="bg-slate-900 border border-rose-500/40 rounded-3xl p-6 max-w-sm w-full text-center space-y-4 shadow-2xl cursor-default"
+          >
             <div className="w-12 h-12 rounded-full bg-rose-500/20 text-rose-400 flex items-center justify-center mx-auto">
               <Trash2 className="w-6 h-6" />
             </div>
@@ -421,8 +439,17 @@ export const MediaManager: React.FC<MediaManagerProps> = ({ onGalleryUpdated }) 
 
       {/* Create / Edit Modal */}
       {editingItem && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-slate-950/85 backdrop-blur-md overflow-y-auto animate-in fade-in">
-          <div className="bg-slate-900 border border-purple-500/40 rounded-3xl max-w-2xl w-full p-5 sm:p-8 text-white relative shadow-2xl my-auto max-h-[92vh] flex flex-col">
+        <div
+          onClick={() => {
+            setEditingItem(null);
+            setIsCreating(false);
+          }}
+          className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-slate-950/85 backdrop-blur-md overflow-y-auto animate-in fade-in cursor-pointer"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="bg-slate-900 border border-purple-500/40 rounded-3xl max-w-2xl w-full p-5 sm:p-8 text-white relative shadow-2xl my-auto max-h-[92vh] flex flex-col cursor-default"
+          >
             {/* Header */}
             <div className="flex items-center justify-between pb-4 border-b border-slate-800 shrink-0 mb-4">
               <div className="flex items-center gap-3">

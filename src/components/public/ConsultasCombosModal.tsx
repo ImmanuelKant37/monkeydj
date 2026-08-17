@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { MessageSquare, Sparkles, X, Check, Tag, Send, Gift, ShieldCheck } from 'lucide-react';
 import { SupabaseService, CustomerConsulta } from '../../services/supabase';
 import { AppStorage } from '../../services/storage';
@@ -17,6 +17,14 @@ export const ConsultasCombosModal: React.FC<ConsultasCombosModalProps> = ({ onCl
   const [selectedCombo, setSelectedCombo] = useState<string | null>(null);
   const [submitted, setSubmitted] = useState(false);
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onClose]);
 
   const combos = [
     {
@@ -77,11 +85,17 @@ export const ConsultasCombosModal: React.FC<ConsultasCombosModalProps> = ({ onCl
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-md animate-in fade-in overflow-y-auto">
-      <div className="bg-slate-900 border border-purple-500/40 rounded-3xl max-w-xl w-full p-6 text-white space-y-5 relative shadow-2xl my-8">
+    <div
+      onClick={onClose}
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-md animate-in fade-in overflow-y-auto cursor-pointer"
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="bg-slate-900 border border-purple-500/40 rounded-3xl max-w-xl w-full p-6 text-white space-y-5 relative shadow-2xl my-8 cursor-default"
+      >
         <button
           onClick={onClose}
-          className="absolute top-4 right-4 p-2 rounded-full bg-slate-800 text-slate-400 hover:text-white"
+          className="absolute top-4 right-4 p-2 rounded-full bg-slate-800 text-slate-400 hover:text-white cursor-pointer"
         >
           <X className="w-5 h-5" />
         </button>
