@@ -8,20 +8,20 @@ import {
   Play,
   Film,
   Search,
-  Upload,
-  UploadCloud,
   CheckCircle2,
   X,
   Star,
   Save,
   Building2,
   Tag,
-  Layers
+  Layers,
+  UploadCloud,
+  Upload
 } from 'lucide-react';
 import { AppStorage } from '../../services/storage';
 import { GalleryItem, EventType } from '../../types';
 import { BulkMediaImporter } from './BulkMediaImporter';
-import { optimizeImageFile, optimizeVideoFile, cleanMediaUrl } from '../../utils/imageOptimizer';
+import { MediaUploaderField } from './MediaUploaderField';
 
 interface MediaManagerProps {
   onGalleryUpdated?: () => void;
@@ -152,51 +152,6 @@ export const MediaManager: React.FC<MediaManagerProps> = ({ onGalleryUpdated }) 
   const handleToggleFeatured = (id: string) => {
     const updated = gallery.map((g) => (g.id === id ? { ...g, featured: !g.featured } : g));
     handleSaveAll(updated);
-  };
-
-  // Upload handlers with auto-compression
-  const handleMediaFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file && editingItem) {
-      try {
-        if (file.type.startsWith('video/')) {
-          const opt = await optimizeVideoFile(file);
-          setEditingItem({
-            ...editingItem,
-            mediaUrl: opt.mediaUrl,
-            thumbnailUrl: editingItem.thumbnailUrl || opt.thumbnailUrl,
-            mediaType: opt.mediaType
-          });
-          showToast('Video cargado correctamente.');
-        } else {
-          const opt = await optimizeImageFile(file, { maxWidth: 1600, maxHeight: 1600, quality: 0.82 });
-          setEditingItem({
-            ...editingItem,
-            mediaUrl: opt.mediaUrl,
-            thumbnailUrl: editingItem.thumbnailUrl || opt.thumbnailUrl
-          });
-          showToast('Imagen cargada y comprimida exitosamente.');
-        }
-      } catch (err) {
-        showToast('Error al procesar el archivo seleccionado.');
-      }
-    }
-  };
-
-  const handleThumbnailUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file && editingItem) {
-      try {
-        const opt = await optimizeImageFile(file, { maxWidth: 600, maxHeight: 600, quality: 0.75 });
-        setEditingItem({
-          ...editingItem,
-          thumbnailUrl: opt.thumbnailUrl || opt.mediaUrl
-        });
-        showToast('Miniatura actualizada.');
-      } catch (err) {
-        showToast('Error al procesar la miniatura.');
-      }
-    }
   };
 
   const handleAddTag = () => {
@@ -638,81 +593,42 @@ export const MediaManager: React.FC<MediaManagerProps> = ({ onGalleryUpdated }) 
                 </div>
               </div>
 
-              {/* Media URL / Upload */}
-              <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800 space-y-3">
-                <label className="text-slate-300 font-bold block">
-                  URL del Archivo Multimedia (o subir desde dispositivo)
-                </label>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-center">
-                  <div className="sm:col-span-2 space-y-2">
-                    <input
-                      type="text"
-                      required
-                      value={editingItem.mediaUrl}
-                      onChange={(e) =>
-                        setEditingItem({
-                          ...editingItem,
-                          mediaUrl: e.target.value,
-                          thumbnailUrl: editingItem.thumbnailUrl || e.target.value
-                        })
-                      }
-                      className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-white text-xs focus:outline-none focus:border-purple-500"
-                      placeholder="https://images.unsplash.com/... o sube un archivo"
-                    />
-                    <label className="py-2 px-3 bg-purple-600/20 hover:bg-purple-600/30 border border-purple-500/40 rounded-xl text-purple-300 font-bold text-xs inline-flex items-center gap-2 cursor-pointer transition-all">
-                      <Upload className="w-3.5 h-3.5" />
-                      <span>Subir archivo desde dispositivo</span>
-                      <input
-                        type="file"
-                        accept="image/*,video/*"
-                        onChange={handleMediaFileUpload}
-                        className="hidden"
-                      />
-                    </label>
-                  </div>
-
-                  <div className="h-24 rounded-xl overflow-hidden bg-slate-900 border border-slate-800 relative">
-                    {editingItem.mediaUrl ? (
-                      <img
-                        src={editingItem.thumbnailUrl || editingItem.mediaUrl}
-                        alt="Preview"
-                        className="w-full h-full object-cover"
-                      />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center text-slate-600 text-[10px]">
-                        Sin vista previa
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
+              {/* Media URL / Upload using enhanced MediaUploaderField */}
+              <MediaUploaderField
+                label="Archivo Multimedia Principal (Foto o Video)"
+                value={editingItem.mediaUrl}
+                thumbnailUrl={editingItem.thumbnailUrl}
+                mediaType={editingItem.mediaType}
+                allowVideo={true}
+                required={true}
+                helperText="Sube una foto o video desde tu dispositivo, o pega una URL web. Se optimizará automáticamente."
+                onChange={(mediaUrl, thumbnailUrl, detectedType) => {
+                  setEditingItem((prev) =>
+                    prev
+                      ? {
+                          ...prev,
+                          mediaUrl,
+                          thumbnailUrl: thumbnailUrl || prev.thumbnailUrl || mediaUrl,
+                          mediaType: detectedType || prev.mediaType
+                        }
+                      : null
+                  );
+                }}
+              />
 
               {/* Thumbnail (for videos) */}
               {editingItem.mediaType !== 'photo' && (
-                <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800 space-y-3">
-                  <label className="text-slate-300 font-bold block">
-                    Portada / Miniatura para el Video (Opcional)
-                  </label>
-                  <div className="flex gap-2 items-center">
-                    <input
-                      type="text"
-                      value={editingItem.thumbnailUrl}
-                      onChange={(e) => setEditingItem({ ...editingItem, thumbnailUrl: e.target.value })}
-                      className="flex-1 bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-white text-xs focus:outline-none focus:border-purple-500"
-                      placeholder="URL de imagen de portada para el video"
-                    />
-                    <label className="py-2 px-3 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-xl text-slate-300 font-bold text-xs inline-flex items-center gap-2 cursor-pointer">
-                      <Upload className="w-3.5 h-3.5" />
-                      <span>Subir Portada</span>
-                      <input
-                        type="file"
-                        accept="image/*"
-                        onChange={handleThumbnailUpload}
-                        className="hidden"
-                      />
-                    </label>
-                  </div>
-                </div>
+                <MediaUploaderField
+                  label="Portada / Miniatura para el Video (Opcional)"
+                  value={editingItem.thumbnailUrl || ''}
+                  thumbnailUrl={editingItem.thumbnailUrl}
+                  mediaType="photo"
+                  allowVideo={false}
+                  helperText="Selecciona una imagen de portada personalizada para el reproductor de video."
+                  onChange={(thumbUrl) => {
+                    setEditingItem((prev) => (prev ? { ...prev, thumbnailUrl: thumbUrl } : null));
+                  }}
+                />
               )}
 
               {/* Tags */}

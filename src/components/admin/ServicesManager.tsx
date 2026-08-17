@@ -9,7 +9,6 @@ import {
   CheckCircle2,
   X,
   Search,
-  Upload,
   Power,
   Eye,
   EyeOff,
@@ -20,7 +19,7 @@ import {
 } from 'lucide-react';
 import { AppStorage } from '../../services/storage';
 import { ServiceItem } from '../../types';
-import { optimizeImageFile, cleanMediaUrl } from '../../utils/imageOptimizer';
+import { MediaUploaderField } from './MediaUploaderField';
 
 interface ServicesManagerProps {
   onServicesUpdated?: () => void;
@@ -139,38 +138,6 @@ export const ServicesManager: React.FC<ServicesManagerProps> = ({ onServicesUpda
   const handleToggleFeatured = (id: string) => {
     const updated = services.map((s) => (s.id === id ? { ...s, featured: !s.featured } : s));
     handleSaveAll(updated);
-  };
-
-  // Image Upload handler with auto-compression
-  const handleImageFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file && editingService) {
-      try {
-        const opt = await optimizeImageFile(file, { maxWidth: 1200, maxHeight: 1200, quality: 0.82 });
-        setEditingService({
-          ...editingService,
-          imageUrl: opt.mediaUrl
-        });
-        showToast('Imagen cargada y optimizada con éxito.');
-      } catch (err) {
-        showToast('Error al procesar la imagen seleccionada.');
-      }
-    }
-  };
-
-  // Video Upload handler (convert to Base64 or Blob URL)
-  const handleVideoFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file && editingService) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setEditingService({
-          ...editingService,
-          videoUrl: reader.result as string
-        });
-      };
-      reader.readAsDataURL(file);
-    }
   };
 
   const handleAddSpec = () => {
@@ -604,91 +571,27 @@ export const ServicesManager: React.FC<ServicesManagerProps> = ({ onServicesUpda
                 </div>
               </div>
 
-              {/* Cover Image Upload / URL */}
-              <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800 space-y-3">
-                <div className="flex items-center justify-between">
-                  <label className="text-slate-300 font-bold flex items-center gap-1.5">
-                    <ImageIcon className="w-4 h-4 text-purple-400" />
-                    <span>Imagen de Portada (URL o Subir Archivo)</span>
-                  </label>
-                </div>
+              {/* Cover Image Upload / URL using MediaUploaderField */}
+              <MediaUploaderField
+                label="Imagen de Portada del Servicio"
+                value={editingService.imageUrl}
+                required={true}
+                helperText="Sube una foto representativa o pega una URL web. Se optimizará y comprimirá automáticamente."
+                onChange={(imgUrl) => {
+                  setEditingService((prev) => (prev ? { ...prev, imageUrl: imgUrl } : null));
+                }}
+              />
 
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-center">
-                  <div className="sm:col-span-2 space-y-2">
-                    <input
-                      type="text"
-                      value={editingService.imageUrl}
-                      onChange={(e) => setEditingService({ ...editingService, imageUrl: e.target.value })}
-                      className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-white text-xs focus:outline-none focus:border-purple-500"
-                      placeholder="https://images.unsplash.com/ o sube un archivo"
-                    />
-                    <div className="flex items-center gap-2">
-                      <label className="py-2 px-3 bg-purple-600/20 hover:bg-purple-600/30 border border-purple-500/40 rounded-xl text-purple-300 font-bold text-xs flex items-center gap-2 cursor-pointer transition-all">
-                        <Upload className="w-3.5 h-3.5" />
-                        <span>Subir Imagen desde dispositivo</span>
-                        <input
-                          type="file"
-                          accept="image/*"
-                          onChange={handleImageFileChange}
-                          className="hidden"
-                        />
-                      </label>
-                    </div>
-                  </div>
-
-                  {/* Preview Thumbnail */}
-                  <div className="h-24 rounded-xl overflow-hidden bg-slate-900 border border-slate-800 relative">
-                    {editingService.imageUrl ? (
-                      <img
-                        src={editingService.imageUrl}
-                        alt="Preview"
-                        className="w-full h-full object-cover"
-                      />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center text-slate-600 text-[10px]">
-                        Sin vista previa
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              {/* Video URL or File */}
-              <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800 space-y-3">
-                <label className="text-slate-300 font-bold flex items-center gap-1.5">
-                  <Video className="w-4 h-4 text-pink-400" />
-                  <span>Video Demostrativo / Reel (Opcional - URL o Archivo)</span>
-                </label>
-
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-center">
-                  <div className="sm:col-span-2 space-y-2">
-                    <input
-                      type="text"
-                      value={editingService.videoUrl || ''}
-                      onChange={(e) => setEditingService({ ...editingService, videoUrl: e.target.value })}
-                      className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-white text-xs focus:outline-none focus:border-purple-500"
-                      placeholder="URL de YouTube, Vimeo, MP4 o enlace externo"
-                    />
-                    <label className="py-2 px-3 bg-pink-600/20 hover:bg-pink-600/30 border border-pink-500/40 rounded-xl text-pink-300 font-bold text-xs inline-flex items-center gap-2 cursor-pointer transition-all">
-                      <Upload className="w-3.5 h-3.5" />
-                      <span>Subir Video Corto desde dispositivo</span>
-                      <input
-                        type="file"
-                        accept="video/*"
-                        onChange={handleVideoFileChange}
-                        className="hidden"
-                      />
-                    </label>
-                  </div>
-
-                  {editingService.videoUrl && (
-                    <div className="p-2 bg-slate-900 border border-slate-800 rounded-xl text-[10px] text-emerald-400 font-semibold flex items-center gap-1">
-                      <CheckCircle2 className="w-4 h-4 shrink-0" />
-                      <span className="truncate">Video cargado</span>
-                    </div>
-                  )}
-                </div>
-              </div>
+              {/* Video URL or File using MediaUploaderField */}
+              <MediaUploaderField
+                label="Video Demostrativo / Reel (Opcional)"
+                value={editingService.videoUrl || ''}
+                allowVideo={true}
+                helperText="Sube un video corto o pega un enlace externo para mostrar el servicio en acción."
+                onChange={(vidUrl) => {
+                  setEditingService((prev) => (prev ? { ...prev, videoUrl: vidUrl } : null));
+                }}
+              />
 
               {/* Technical Specifications */}
               <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800 space-y-3">

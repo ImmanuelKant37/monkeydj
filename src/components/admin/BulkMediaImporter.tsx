@@ -341,6 +341,42 @@ export const BulkMediaImporter: React.FC<BulkMediaImporterProps> = ({
     );
   };
 
+  // Replace file for a specific staged item
+  const handleReplaceStagedFile = async (itemId: string, file: File) => {
+    try {
+      const isImage = file.type.startsWith('image/') || /\.(jpg|jpeg|png|webp|gif|bmp|heic)$/i.test(file.name);
+      if (isImage) {
+        const opt = await optimizeImageFile(file, { maxWidth: 1600, maxHeight: 1600, quality: 0.82 });
+        handleUpdateItem(itemId, {
+          mediaUrl: opt.mediaUrl,
+          thumbnailUrl: opt.thumbnailUrl || opt.mediaUrl,
+          originalSize: opt.originalSize,
+          compressedSize: opt.compressedSize,
+          mediaType: 'photo'
+        });
+      } else {
+        const opt = await optimizeVideoFile(file);
+        handleUpdateItem(itemId, {
+          mediaUrl: opt.mediaUrl,
+          thumbnailUrl: opt.thumbnailUrl,
+          originalSize: opt.originalSize,
+          compressedSize: opt.compressedSize,
+          mediaType: opt.mediaType
+        });
+      }
+      setFeedbackMsg({
+        type: 'success',
+        text: 'Archivo reemplazado y optimizado correctamente en la cola.'
+      });
+    } catch (err) {
+      console.error('Error replacing staged file:', err);
+      setFeedbackMsg({
+        type: 'error',
+        text: 'Error al reemplazar el archivo.'
+      });
+    }
+  };
+
   // Final Import Confirmation
   const handleConfirmImport = async () => {
     if (stagedItems.length === 0) return;
@@ -804,6 +840,25 @@ export const BulkMediaImporter: React.FC<BulkMediaImporterProps> = ({
                           </option>
                         ))}
                       </select>
+
+                      <label
+                        className="p-1.5 rounded-xl bg-purple-600/20 hover:bg-purple-600/30 text-purple-300 border border-purple-500/30 transition-all cursor-pointer"
+                        title="Cambiar / Reemplazar Foto"
+                      >
+                        <RefreshCw className="w-3.5 h-3.5" />
+                        <input
+                          type="file"
+                          accept="image/*,video/*"
+                          className="hidden"
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (file) {
+                              handleReplaceStagedFile(item.id, file);
+                            }
+                            e.target.value = '';
+                          }}
+                        />
+                      </label>
 
                       <button
                         type="button"

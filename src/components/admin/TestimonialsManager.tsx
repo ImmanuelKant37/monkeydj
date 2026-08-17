@@ -10,11 +10,11 @@ import {
   Save,
   Building2,
   MessageSquare,
-  Upload,
   UserCheck
 } from 'lucide-react';
 import { AppStorage } from '../../services/storage';
 import { Testimonial, EventType } from '../../types';
+import { MediaUploaderField } from './MediaUploaderField';
 
 interface TestimonialsManagerProps {
   onTestimonialsUpdated?: () => void;
@@ -130,20 +130,6 @@ export const TestimonialsManager: React.FC<TestimonialsManagerProps> = ({
       t.id === id ? { ...t, verified: !t.verified } : t
     );
     handleSaveAll(updated);
-  };
-
-  const handleAvatarUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file && editingItem) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setEditingItem({
-          ...editingItem,
-          avatarUrl: reader.result as string
-        });
-      };
-      reader.readAsDataURL(file);
-    }
   };
 
   const getBranchLabel = (branchId?: string) => {
@@ -508,29 +494,16 @@ export const TestimonialsManager: React.FC<TestimonialsManagerProps> = ({
                 ></textarea>
               </div>
 
-              {/* Avatar Upload / URL */}
-              <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800 space-y-3">
-                <label className="text-slate-300 font-bold block">Avatar / Foto del Cliente (Opcional)</label>
-                <div className="flex gap-2 items-center">
-                  <input
-                    type="text"
-                    value={editingItem.avatarUrl || ''}
-                    onChange={(e) => setEditingItem({ ...editingItem, avatarUrl: e.target.value })}
-                    className="flex-1 bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-white text-xs focus:outline-none focus:border-amber-500"
-                    placeholder="URL de imagen de perfil..."
-                  />
-                  <label className="py-2 px-3 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-xl text-slate-300 font-bold text-xs inline-flex items-center gap-2 cursor-pointer">
-                    <Upload className="w-3.5 h-3.5" />
-                    <span>Subir Foto</span>
-                    <input
-                      type="file"
-                      accept="image/*"
-                      onChange={handleAvatarUpload}
-                      className="hidden"
-                    />
-                  </label>
-                </div>
-              </div>
+              {/* Avatar Upload / URL using MediaUploaderField */}
+              <MediaUploaderField
+                label="Avatar / Foto del Cliente (Opcional)"
+                value={editingItem.avatarUrl || ''}
+                required={false}
+                helperText="Sube la foto del cliente o pega un enlace para el avatar."
+                onChange={(avatar) => {
+                  setEditingItem((prev) => (prev ? { ...prev, avatarUrl: avatar } : null));
+                }}
+              />
 
               {/* Toggles */}
               <div className="flex flex-wrap gap-6 pt-2">
