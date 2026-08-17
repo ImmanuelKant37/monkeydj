@@ -1,5 +1,5 @@
 import { jsPDF } from 'jspdf';
-import { QuoteResult, EventRecord, Branch } from '../types';
+import { QuoteResult, EventRecord, Branch, EventProcedure } from '../types';
 
 export function generateQuotePDF(quote: QuoteResult, branch?: Branch): void {
   const doc = new jsPDF({
@@ -271,3 +271,207 @@ export function generateContractPDF(event: EventRecord, branch?: Branch): void {
 
   doc.save(`Contrato_AURA_${event.eventNumber}.pdf`);
 }
+
+export function generateProcedureProtocolPDF(
+  procedures: EventProcedure[],
+  eventType: string = 'General',
+  eventTitle?: string
+): void {
+  const doc = new jsPDF({
+    orientation: 'landscape',
+    unit: 'mm',
+    format: 'a4'
+  });
+
+  const pageWidth = 297;
+  const pageHeight = 210;
+  const marginX = 12;
+  const contentWidth = pageWidth - marginX * 2; // 273mm
+
+  // Colors
+  const primaryColor = [15, 23, 42]; // Slate 900
+  const accentColor = [147, 51, 234]; // Purple 600
+  const zebraColor = [248, 250, 252]; // Slate 50
+  const borderColor = [226, 232, 240]; // Slate 200
+
+  // Calculate totals
+  const totalMinutes = procedures.reduce((acc, p) => acc + (p.durationMinutes || 15), 0);
+  const hours = Math.floor(totalMinutes / 60);
+  const mins = totalMinutes % 60;
+  const totalDurationStr = hours > 0 ? `${hours}h ${mins > 0 ? `${mins}m` : ''}` : `${mins} min`;
+
+  const drawHeader = (pageNum: number) => {
+    // Header banner
+    doc.setFillColor(primaryColor[0], primaryColor[1], primaryColor[2]);
+    doc.rect(0, 0, pageWidth, 28, 'F');
+
+    // Accent line
+    doc.setFillColor(accentColor[0], accentColor[1], accentColor[2]);
+    doc.rect(0, 27, pageWidth, 1.5, 'F');
+
+    // Title
+    doc.setTextColor(255, 255, 255);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(16);
+    doc.text('AURA SOUND & EVENTOS — PROTOCOLO Y CRONOGRAMA OPERATIVO', marginX, 12);
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(9);
+    doc.setTextColor(203, 213, 225);
+    doc.text(
+      `Tipo de Evento: ${eventType.toUpperCase()}${eventTitle ? ` | Evento: ${eventTitle}` : ''} | Generado: ${new Date().toLocaleDateString('es-AR')} ${new Date().toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}`,
+      marginX,
+      19
+    );
+
+    // Right header stats
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(9);
+    doc.setTextColor(243, 232, 255);
+    doc.text(`Total Momentos: ${procedures.length} | Duración Est.: ${totalDurationStr}`, pageWidth - marginX - 85, 12);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(8);
+    doc.setTextColor(192, 132, 252);
+    doc.text('Hoja de Ruta para DJ, Animación y Técnica', pageWidth - marginX - 85, 19);
+  };
+
+  const drawTableHeader = (startY: number) => {
+    doc.setFillColor(primaryColor[0], primaryColor[1], primaryColor[2]);
+    doc.rect(marginX, startY, contentWidth, 8, 'F');
+
+    doc.setTextColor(255, 255, 255);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(8);
+
+    doc.text('N°', marginX + 3, startY + 5.5);
+    doc.text('HORARIO / DUR.', marginX + 13, startY + 5.5);
+    doc.text('MOMENTO / ETAPA', marginX + 44, startY + 5.5);
+    doc.text('MÚSICA SUGERIDA / ESTILO', marginX + 110, startY + 5.5);
+    doc.text('INDICACIONES DJ / ANIMADOR', marginX + 172, startY + 5.5);
+    doc.text('EQUIPAMIENTO & FX', marginX + 232, startY + 5.5);
+  };
+
+  const drawFooter = (currentPage: number, totalPages: number) => {
+    doc.setDrawColor(borderColor[0], borderColor[1], borderColor[2]);
+    doc.line(marginX, pageHeight - 12, pageWidth - marginX, pageHeight - 12);
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(7.5);
+    doc.setTextColor(100, 116, 139);
+    doc.text('AURA Sound & Eventos • www.aurasound.com.ar • Coordinación Técnica y Producción', marginX, pageHeight - 7);
+    doc.text(`Página ${currentPage} de ${totalPages}`, pageWidth - marginX - 25, pageHeight - 7);
+  };
+
+  // Render first page header
+  drawHeader(1);
+
+  let currentY = 34;
+  drawTableHeader(currentY);
+  currentY += 8;
+
+  const colWidths = {
+    num: 10,
+    time: 30,
+    title: 65,
+    music: 60,
+    desc: 58,
+    equip: 50
+  };
+
+  procedures.forEach((proc, index) => {
+    // Split texts to fit column widths
+    const timeText = `${proc.estimatedTime || 'N/A'}\n(${proc.durationMinutes || 15} min)`;
+    const titleText = `${proc.title}\n[${proc.category}]`;
+    const musicText = proc.suggestedMusic || 'Libre elección del DJ';
+    const descText = proc.description || 'Sin indicaciones especiales.';
+    const equipText = proc.requiredEquipment || 'Estándar';
+
+    const titleLines = doc.splitTextToSize(titleText, colWidths.title - 4);
+    const musicLines = doc.splitTextToSize(musicText, colWidths.music - 4);
+    const descLines = doc.splitTextToSize(descText, colWidths.desc - 4);
+    const equipLines = doc.splitTextToSize(equipText, colWidths.equip - 4);
+
+    const maxLines = Math.max(2, titleLines.length, musicLines.length, descLines.length, equipLines.length);
+    const rowHeight = Math.max(12, maxLines * 4.2 + 3);
+
+    // Check page overflow
+    if (currentY + rowHeight > pageHeight - 16) {
+      doc.addPage();
+      drawHeader(doc.getNumberOfPages());
+      currentY = 34;
+      drawTableHeader(currentY);
+      currentY += 8;
+    }
+
+    // Zebra background
+    if (index % 2 === 1) {
+      doc.setFillColor(zebraColor[0], zebraColor[1], zebraColor[2]);
+      doc.rect(marginX, currentY, contentWidth, rowHeight, 'F');
+    }
+
+    // Bottom row border
+    doc.setDrawColor(borderColor[0], borderColor[1], borderColor[2]);
+    doc.line(marginX, currentY + rowHeight, marginX + contentWidth, currentY + rowHeight);
+
+    // Column 1: Order Number
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(8.5);
+    doc.setTextColor(109, 40, 217); // Purple
+    doc.text(`#${index + 1}`, marginX + 3, currentY + 5.5);
+
+    // Column 2: Horario y Duración
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(8);
+    doc.setTextColor(180, 83, 9); // Amber
+    doc.text(proc.estimatedTime || 'A confirmar', marginX + 13, currentY + 5);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(7.5);
+    doc.setTextColor(100, 116, 139);
+    doc.text(`${proc.durationMinutes || 15} min`, marginX + 13, currentY + 9);
+
+    // Column 3: Titulo y Categoría
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(8);
+    doc.setTextColor(15, 23, 42);
+    doc.text(titleLines[0] || '', marginX + 44, currentY + 5);
+    if (titleLines.length > 1) {
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(7.5);
+      doc.setTextColor(100, 116, 139);
+      for (let i = 1; i < titleLines.length; i++) {
+        doc.text(titleLines[i], marginX + 44, currentY + 5 + i * 3.8);
+      }
+    }
+
+    // Column 4: Música sugerida
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(7.5);
+    doc.setTextColor(30, 41, 59);
+    doc.text(musicLines, marginX + 110, currentY + 5);
+
+    // Column 5: Indicaciones
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(7.5);
+    doc.setTextColor(51, 65, 85);
+    doc.text(descLines, marginX + 172, currentY + 5);
+
+    // Column 6: Equipamiento
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(7.5);
+    doc.setTextColor(71, 85, 105);
+    doc.text(equipLines, marginX + 232, currentY + 5);
+
+    currentY += rowHeight;
+  });
+
+  // Stamp all page footers
+  const totalPages = doc.getNumberOfPages();
+  for (let i = 1; i <= totalPages; i++) {
+    doc.setPage(i);
+    drawFooter(i, totalPages);
+  }
+
+  const safeFileName = `Protocolo_${eventType.replace(/[\s\/\\]+/g, '_')}_AURA_${new Date().toISOString().slice(0, 10)}.pdf`;
+  doc.save(safeFileName);
+}
+

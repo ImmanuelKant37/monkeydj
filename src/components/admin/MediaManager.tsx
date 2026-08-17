@@ -21,6 +21,7 @@ import {
 import { AppStorage } from '../../services/storage';
 import { GalleryItem, EventType } from '../../types';
 import { BulkMediaImporter } from './BulkMediaImporter';
+import { optimizeImageFile, optimizeVideoFile, cleanMediaUrl } from '../../utils/imageOptimizer';
 
 interface MediaManagerProps {
   onGalleryUpdated?: () => void;
@@ -97,12 +98,12 @@ export const MediaManager: React.FC<MediaManagerProps> = ({ onGalleryUpdated }) 
     const newItem: GalleryItem = {
       id: `gal-${Date.now()}`,
       title: 'Nueva Producción Audiovisual',
-      eventTitle: 'Boda / Evento Ejemplo',
+      eventTitle: '',
       mediaType: 'photo',
-      mediaUrl: 'https://images.unsplash.com/photo-1519741497674-611481863552?auto=format&fit=crop&w=1200&q=80',
-      thumbnailUrl: 'https://images.unsplash.com/photo-1519741497674-611481863552?auto=format&fit=crop&w=500&q=80',
+      mediaUrl: '',
+      thumbnailUrl: '',
       category: 'Casamiento',
-      tags: ['SonidoLive', 'LucesRobóticas'],
+      tags: ['MonkeyDJ', 'ProduccionLive'],
       featured: true,
       branchId: 'all'
     };
@@ -141,39 +142,60 @@ export const MediaManager: React.FC<MediaManagerProps> = ({ onGalleryUpdated }) 
     showToast('Elemento eliminado de la galería.');
   };
 
+  const handleClearAllGallery = () => {
+    if (window.confirm('¿Estás seguro de que deseas vaciar todas las fotos y videos de la galería?')) {
+      handleSaveAll([]);
+      showToast('Galería vaciada completamente.');
+    }
+  };
+
   const handleToggleFeatured = (id: string) => {
     const updated = gallery.map((g) => (g.id === id ? { ...g, featured: !g.featured } : g));
     handleSaveAll(updated);
   };
 
-  // Upload handlers
-  const handleMediaFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // Upload handlers with auto-compression
+  const handleMediaFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file && editingItem) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        const result = reader.result as string;
-        setEditingItem({
-          ...editingItem,
-          mediaUrl: result,
-          thumbnailUrl: editingItem.thumbnailUrl || (file.type.startsWith('image') ? result : '')
-        });
-      };
-      reader.readAsDataURL(file);
+      try {
+        if (file.type.startsWith('video/')) {
+          const opt = await optimizeVideoFile(file);
+          setEditingItem({
+            ...editingItem,
+            mediaUrl: opt.mediaUrl,
+            thumbnailUrl: editingItem.thumbnailUrl || opt.thumbnailUrl,
+            mediaType: opt.mediaType
+          });
+          showToast('Video cargado correctamente.');
+        } else {
+          const opt = await optimizeImageFile(file, { maxWidth: 1600, maxHeight: 1600, quality: 0.82 });
+          setEditingItem({
+            ...editingItem,
+            mediaUrl: opt.mediaUrl,
+            thumbnailUrl: editingItem.thumbnailUrl || opt.thumbnailUrl
+          });
+          showToast('Imagen cargada y comprimida exitosamente.');
+        }
+      } catch (err) {
+        showToast('Error al procesar el archivo seleccionado.');
+      }
     }
   };
 
-  const handleThumbnailUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleThumbnailUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file && editingItem) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
+      try {
+        const opt = await optimizeImageFile(file, { maxWidth: 600, maxHeight: 600, quality: 0.75 });
         setEditingItem({
           ...editingItem,
-          thumbnailUrl: reader.result as string
+          thumbnailUrl: opt.thumbnailUrl || opt.mediaUrl
         });
-      };
-      reader.readAsDataURL(file);
+        showToast('Miniatura actualizada.');
+      } catch (err) {
+        showToast('Error al procesar la miniatura.');
+      }
     }
   };
 
@@ -229,6 +251,17 @@ export const MediaManager: React.FC<MediaManagerProps> = ({ onGalleryUpdated }) 
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
+          {gallery.length > 0 && (
+            <button
+              onClick={handleClearAllGallery}
+              className="py-3 px-4 rounded-2xl bg-rose-950/70 hover:bg-rose-900 border border-rose-500/40 text-rose-300 font-bold text-xs flex items-center justify-center gap-2 cursor-pointer transition-all"
+              title="Vaciar toda la galería"
+            >
+              <Trash2 className="w-4 h-4" />
+              <span className="hidden sm:inline">VACIAR GALERÍA</span>
+            </button>
+          )}
+
           <button
             onClick={() => setIsBulkImportOpen(true)}
             className="py-3 px-5 rounded-2xl bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 text-white font-black text-xs shadow-lg shadow-indigo-600/30 flex items-center justify-center gap-2 cursor-pointer transition-all transform hover:scale-105 border border-indigo-400/30"
@@ -613,7 +646,7 @@ export const MediaManager: React.FC<MediaManagerProps> = ({ onGalleryUpdated }) 
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-center">
                   <div className="sm:col-span-2 space-y-2">
                     <input
-                      type="url"
+                      type="text"
                       required
                       value={editingItem.mediaUrl}
                       onChange={(e) =>
@@ -624,7 +657,7 @@ export const MediaManager: React.FC<MediaManagerProps> = ({ onGalleryUpdated }) 
                         })
                       }
                       className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-white text-xs focus:outline-none focus:border-purple-500"
-                      placeholder="https://images.unsplash.com/..."
+                      placeholder="https://images.unsplash.com/... o sube un archivo"
                     />
                     <label className="py-2 px-3 bg-purple-600/20 hover:bg-purple-600/30 border border-purple-500/40 rounded-xl text-purple-300 font-bold text-xs inline-flex items-center gap-2 cursor-pointer transition-all">
                       <Upload className="w-3.5 h-3.5" />

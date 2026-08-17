@@ -16,9 +16,13 @@ import {
   AlertCircle,
   Star,
   Check,
-  RefreshCw
+  RefreshCw,
+  Clipboard,
+  Zap,
+  Loader2
 } from 'lucide-react';
 import { GalleryItem, EventType, Branch } from '../../types';
+import { optimizeImageFile, optimizeVideoFile, cleanMediaUrl } from '../../utils/imageOptimizer';
 
 interface StagedMediaItem {
   id: string;
@@ -34,6 +38,8 @@ interface StagedMediaItem {
   featured: boolean;
   status: 'ready' | 'processing' | 'done' | 'error';
   errorMessage?: string;
+  originalSize?: number;
+  compressedSize?: number;
 }
 
 interface BulkMediaImporterProps {
@@ -50,8 +56,11 @@ export const BulkMediaImporter: React.FC<BulkMediaImporterProps> = ({
   const [activeTab, setActiveTab] = useState<'dragdrop' | 'urls'>('dragdrop');
   const [isDragging, setIsDragging] = useState(false);
   const [stagedItems, setStagedItems] = useState<StagedMediaItem[]>([]);
+  const [isReadingFiles, setIsReadingFiles] = useState(false);
+  const [readingProgress, setReadingProgress] = useState({ current: 0, total: 0 });
   const [isProcessing, setIsProcessing] = useState(false);
   const [progress, setProgress] = useState(0);
+  const [feedbackMsg, setFeedbackMsg] = useState<{ type: 'success' | 'error' | 'info'; text: string } | null>(null);
 
   // Batch default controls
   const [defaultCategory, setDefaultCategory] = useState<EventType>('Casamiento');
@@ -90,21 +99,6 @@ export const BulkMediaImporter: React.FC<BulkMediaImporterProps> = ({
       .join(' ');
   };
 
-  // Helper to detect media type
-  const detectMediaType = (file: File): 'photo' | 'video' | 'reel' => {
-    if (defaultMediaType !== 'auto') {
-      return defaultMediaType;
-    }
-    if (file.type.startsWith('video')) {
-      // If filename includes reel/short or vertical hint
-      if (file.name.toLowerCase().includes('reel') || file.name.toLowerCase().includes('short')) {
-        return 'reel';
-      }
-      return 'video';
-    }
-    return 'photo';
-  };
-
   // Parse tags string
   const parseTags = (text: string): string[] => {
     return text
@@ -113,44 +107,140 @@ export const BulkMediaImporter: React.FC<BulkMediaImporterProps> = ({
       .filter((t) => t.length > 0);
   };
 
-  // Process selected or dropped files
-  const processFiles = useCallback((files: FileList | File[]) => {
-    const fileArray = Array.from(files);
-    const validFiles = fileArray.filter((file) =>
-      file.type.startsWith('image/') || file.type.startsWith('video/')
-    );
+  // Format bytes for human readable display
+  const formatBytes = (bytes?: number) => {
+    if (!bytes || bytes <= 0) return '';
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  };
 
-    if (validFiles.length === 0) return;
+  // Process selected or dropped files with client-side image compression
+  const processFiles = useCallback(
+    async (files: FileList | File[]) => {
+      const fileArray = Array.from(files);
+      if (fileArray.length === 0) return;
 
-    validFiles.forEach((file) => {
-      const detectedType = detectMediaType(file);
-      const reader = new FileReader();
+      setIsReadingFiles(true);
+      setReadingProgress({ current: 0, total: fileArray.length });
+      setFeedbackMsg(null);
 
-      reader.onload = (e) => {
-        const resultUrl = e.target?.result as string;
-        const autoTitle = formatTitleFromFilename(file.name);
+      const newStagedList: StagedMediaItem[] = [];
+      let successCount = 0;
+      let errorCount = 0;
 
-        const newItem: StagedMediaItem = {
-          id: `staged-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
-          file,
-          title: autoTitle || 'Nueva Producción Audiovisual',
-          eventTitle: defaultEventTitle || 'Evento Destacado Monkey DJ',
-          mediaType: detectedType,
-          mediaUrl: resultUrl,
-          thumbnailUrl: detectedType === 'photo' ? resultUrl : '',
-          category: defaultCategory,
-          branchId: defaultBranchId,
-          tags: parseTags(defaultTagsText),
-          featured: defaultFeatured,
-          status: 'ready'
-        };
+      for (let i = 0; i < fileArray.length; i++) {
+        const file = fileArray[i];
+        setReadingProgress({ current: i + 1, total: fileArray.length });
 
-        setStagedItems((prev) => [...prev, newItem]);
-      };
+        try {
+          const isImage = file.type.startsWith('image/') || /\.(jpg|jpeg|png|webp|gif|bmp|heic)$/i.test(file.name);
+          const isVideo = file.type.startsWith('video/') || /\.(mp4|mov|webm|m4v|avi)$/i.test(file.name);
 
-      reader.readAsDataURL(file);
-    });
-  }, [defaultCategory, defaultBranchId, defaultEventTitle, defaultTagsText, defaultFeatured, defaultMediaType]);
+          if (!isImage && !isVideo) {
+            errorCount++;
+            continue;
+          }
+
+          let optimizedMediaUrl = '';
+          let optimizedThumbnail = '';
+          let detectedType: 'photo' | 'video' | 'reel' = 'photo';
+          let origSize = file.size;
+          let compSize = file.size;
+
+          if (isImage) {
+            detectedType = 'photo';
+            const opt = await optimizeImageFile(file, { maxWidth: 1600, maxHeight: 1600, quality: 0.82 });
+            optimizedMediaUrl = opt.mediaUrl;
+            optimizedThumbnail = opt.thumbnailUrl;
+            origSize = opt.originalSize;
+            compSize = opt.compressedSize;
+          } else {
+            const opt = await optimizeVideoFile(file);
+            optimizedMediaUrl = opt.mediaUrl;
+            optimizedThumbnail = opt.thumbnailUrl;
+            detectedType = opt.mediaType;
+            origSize = opt.originalSize;
+            compSize = opt.compressedSize;
+          }
+
+          if (defaultMediaType !== 'auto') {
+            detectedType = defaultMediaType;
+          }
+
+          const autoTitle = formatTitleFromFilename(file.name);
+
+          newStagedList.push({
+            id: `staged-${Date.now()}-${i}-${Math.random().toString(36).substring(2, 7)}`,
+            file,
+            title: autoTitle || 'Nueva Producción Audiovisual',
+            eventTitle: defaultEventTitle || 'Producción Monkey DJ',
+            mediaType: detectedType,
+            mediaUrl: optimizedMediaUrl,
+            thumbnailUrl: optimizedThumbnail || (detectedType === 'photo' ? optimizedMediaUrl : ''),
+            category: defaultCategory,
+            branchId: defaultBranchId,
+            tags: parseTags(defaultTagsText),
+            featured: defaultFeatured,
+            status: 'ready',
+            originalSize: origSize,
+            compressedSize: compSize
+          });
+
+          successCount++;
+        } catch (err: any) {
+          console.error('Error optimizing file:', file.name, err);
+          errorCount++;
+        }
+      }
+
+      setIsReadingFiles(false);
+
+      if (newStagedList.length > 0) {
+        setStagedItems((prev) => [...prev, ...newStagedList]);
+        setFeedbackMsg({
+          type: 'success',
+          text: `Se procesaron y optimizaron ${successCount} archivo(s) correctamente.`
+        });
+      } else if (errorCount > 0) {
+        setFeedbackMsg({
+          type: 'error',
+          text: 'No se pudieron procesar los archivos seleccionados. Verifica que sean imágenes (JPG, PNG, WEBP) o videos (MP4, MOV).'
+        });
+      }
+    },
+    [defaultCategory, defaultBranchId, defaultEventTitle, defaultTagsText, defaultFeatured, defaultMediaType]
+  );
+
+  // Clipboard paste listener (Ctrl+V support)
+  useEffect(() => {
+    const handlePaste = (e: ClipboardEvent) => {
+      const items = e.clipboardData?.items;
+      if (!items) return;
+
+      const pastedFiles: File[] = [];
+      let pastedText = '';
+
+      for (let i = 0; i < items.length; i++) {
+        const item = items[i];
+        if (item.kind === 'file') {
+          const f = item.getAsFile();
+          if (f) pastedFiles.push(f);
+        } else if (item.kind === 'string' && item.type === 'text/plain') {
+          item.getAsString((text) => {
+            pastedText = text;
+          });
+        }
+      }
+
+      if (pastedFiles.length > 0) {
+        processFiles(pastedFiles);
+      }
+    };
+
+    window.addEventListener('paste', handlePaste);
+    return () => window.removeEventListener('paste', handlePaste);
+  }, [processFiles]);
 
   // Drag and drop handlers
   const handleDragOver = (e: React.DragEvent) => {
@@ -178,40 +268,46 @@ export const BulkMediaImporter: React.FC<BulkMediaImporterProps> = ({
   const handleParseUrls = () => {
     if (!urlListText.trim()) return;
 
-    const lines = urlListText
-      .split('\n')
-      .map((line) => line.trim())
-      .filter((line) => line.length > 0 && (line.startsWith('http://') || line.startsWith('https://')));
+    const rawLines = urlListText.split(/[\r\n]+/);
+    const validItems: StagedMediaItem[] = [];
 
-    const newItems: StagedMediaItem[] = lines.map((url, idx) => {
-      let detectedType: 'photo' | 'video' | 'reel' = 'photo';
-      if (url.includes('.mp4') || url.includes('.webm') || url.includes('video')) {
-        detectedType = 'video';
-      }
-      if (url.includes('reel') || url.includes('short')) {
-        detectedType = 'reel';
-      }
-      if (defaultMediaType !== 'auto') {
-        detectedType = defaultMediaType;
-      }
+    rawLines.forEach((line, idx) => {
+      const clean = cleanMediaUrl(line);
+      if (clean.isValid && clean.url) {
+        let type = clean.mediaType;
+        if (defaultMediaType !== 'auto') {
+          type = defaultMediaType;
+        }
 
-      return {
-        id: `staged-url-${Date.now()}-${idx}`,
-        title: `${defaultEventTitle || 'Producción'} #${idx + 1}`,
-        eventTitle: defaultEventTitle || 'Producción Audiovisual Monkey DJ',
-        mediaType: detectedType,
-        mediaUrl: url,
-        thumbnailUrl: detectedType === 'photo' ? url : '',
-        category: defaultCategory,
-        branchId: defaultBranchId,
-        tags: parseTags(defaultTagsText),
-        featured: defaultFeatured,
-        status: 'ready'
-      };
+        validItems.push({
+          id: `staged-url-${Date.now()}-${idx}-${Math.random().toString(36).substring(2, 6)}`,
+          title: `${defaultEventTitle || 'Producción Audiovisual'} #${idx + 1}`,
+          eventTitle: defaultEventTitle || 'Evento Destacado Monkey DJ',
+          mediaType: type,
+          mediaUrl: clean.url,
+          thumbnailUrl: type === 'photo' ? clean.url : '',
+          category: defaultCategory,
+          branchId: defaultBranchId,
+          tags: parseTags(defaultTagsText),
+          featured: defaultFeatured,
+          status: 'ready'
+        });
+      }
     });
 
-    setStagedItems((prev) => [...prev, ...newItems]);
-    setUrlListText('');
+    if (validItems.length > 0) {
+      setStagedItems((prev) => [...prev, ...validItems]);
+      setUrlListText('');
+      setFeedbackMsg({
+        type: 'success',
+        text: `Se agregaron ${validItems.length} enlace(s) a la cola de importación.`
+      });
+    } else {
+      setFeedbackMsg({
+        type: 'error',
+        text: 'No se encontraron enlaces válidos (deben comenzar con http:// o https://).'
+      });
+    }
   };
 
   // Apply batch defaults to all staged items
@@ -227,6 +323,10 @@ export const BulkMediaImporter: React.FC<BulkMediaImporterProps> = ({
         mediaType: defaultMediaType !== 'auto' ? defaultMediaType : item.mediaType
       }))
     );
+    setFeedbackMsg({
+      type: 'info',
+      text: `Valores predeterminados aplicados a los ${stagedItems.length} elementos en cola.`
+    });
   };
 
   // Remove individual staged item
@@ -253,16 +353,15 @@ export const BulkMediaImporter: React.FC<BulkMediaImporterProps> = ({
 
     for (let i = 0; i < total; i++) {
       const item = stagedItems[i];
-      // Simulate smooth batch processing step
-      await new Promise((res) => setTimeout(res, 60));
+      await new Promise((res) => setTimeout(res, 40));
 
       finalGalleryItems.push({
         id: `gal-${Date.now()}-${i}-${Math.random().toString(36).substring(2, 7)}`,
-        title: item.title || 'Producción Monkey DJ',
-        eventTitle: item.eventTitle,
+        title: item.title.trim() || 'Producción Monkey DJ',
+        eventTitle: item.eventTitle.trim(),
         mediaType: item.mediaType,
         mediaUrl: item.mediaUrl,
-        thumbnailUrl: item.thumbnailUrl || (item.mediaType === 'photo' ? item.mediaUrl : 'https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?auto=format&fit=crop&w=600&q=80'),
+        thumbnailUrl: item.thumbnailUrl || (item.mediaType === 'photo' ? item.mediaUrl : ''),
         category: item.category,
         branchId: item.branchId,
         tags: item.tags,
@@ -297,12 +396,13 @@ export const BulkMediaImporter: React.FC<BulkMediaImporterProps> = ({
                 <h2 className="text-xl font-black text-white">
                   IMPORTADOR MASIVO DE FOTOS Y VIDEOS
                 </h2>
-                <span className="bg-purple-500/20 text-purple-300 border border-purple-500/40 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase">
-                  Drag & Drop
+                <span className="bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase flex items-center gap-1">
+                  <Zap className="w-3 h-3 text-emerald-400" />
+                  Auto-Compresión
                 </span>
               </div>
               <p className="text-xs text-slate-400">
-                Arrastra decenas de archivos a la vez o pega listas de URLs para poblar el portafolio audiovisual en segundos.
+                Arrastra decenas de fotos o pega URLs. Las imágenes se optimizan y comprimen automáticamente para almacenamiento ultra liviano.
               </p>
             </div>
           </div>
@@ -314,9 +414,36 @@ export const BulkMediaImporter: React.FC<BulkMediaImporterProps> = ({
           </button>
         </div>
 
+        {/* Feedback Message */}
+        {feedbackMsg && (
+          <div
+            className={`p-3 rounded-2xl text-xs font-semibold flex items-center justify-between gap-2 shrink-0 mb-3 ${
+              feedbackMsg.type === 'success'
+                ? 'bg-emerald-950/80 border border-emerald-500/40 text-emerald-300'
+                : feedbackMsg.type === 'error'
+                ? 'bg-rose-950/80 border border-rose-500/40 text-rose-300'
+                : 'bg-blue-950/80 border border-blue-500/40 text-blue-300'
+            }`}
+          >
+            <div className="flex items-center gap-2">
+              {feedbackMsg.type === 'success' ? (
+                <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+              ) : (
+                <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
+              )}
+              <span>{feedbackMsg.text}</span>
+            </div>
+            <button
+              onClick={() => setFeedbackMsg(null)}
+              className="text-slate-400 hover:text-white cursor-pointer"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        )}
+
         {/* Scrollable Container */}
         <div className="flex-1 overflow-y-auto space-y-6 pr-1 text-xs">
-          
           {/* 1. Ingestion Source Tabs */}
           <div className="flex items-center gap-2 bg-slate-950 p-1.5 rounded-2xl border border-slate-800 w-fit">
             <button
@@ -361,37 +488,70 @@ export const BulkMediaImporter: React.FC<BulkMediaImporterProps> = ({
                 type="file"
                 multiple
                 accept="image/*,video/*"
-                onChange={(e) => e.target.files && processFiles(e.target.files)}
+                onChange={(e) => {
+                  if (e.target.files && e.target.files.length > 0) {
+                    processFiles(e.target.files);
+                  }
+                  e.target.value = '';
+                }}
                 className="hidden"
               />
 
-              <div className="w-16 h-16 rounded-full bg-gradient-to-tr from-purple-600/30 to-pink-600/30 border border-purple-500/40 text-purple-300 flex items-center justify-center shadow-lg">
-                <UploadCloud className="w-8 h-8 animate-bounce-slow" />
-              </div>
+              {isReadingFiles ? (
+                <div className="flex flex-col items-center gap-3 py-4">
+                  <Loader2 className="w-10 h-10 text-purple-400 animate-spin" />
+                  <p className="text-sm font-bold text-purple-300">
+                    Optimizando y comprimiendo archivo {readingProgress.current} de {readingProgress.total}...
+                  </p>
+                  <div className="w-48 h-2 bg-slate-800 rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-gradient-to-r from-purple-500 to-pink-500 transition-all duration-200"
+                      style={{
+                        width: `${Math.round((readingProgress.current / (readingProgress.total || 1)) * 100)}%`
+                      }}
+                    />
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <div className="w-16 h-16 rounded-full bg-gradient-to-tr from-purple-600/30 to-pink-600/30 border border-purple-500/40 text-purple-300 flex items-center justify-center shadow-lg">
+                    <UploadCloud className="w-8 h-8 animate-bounce-slow" />
+                  </div>
 
-              <div className="space-y-1">
-                <p className="text-sm font-black text-white">
-                  Arrastra y suelta tus fotos y videos aquí
-                </p>
-                <p className="text-slate-400 text-xs">
-                  o haz clic para explorar los archivos de tu dispositivo (Selección múltiple admitida)
-                </p>
-              </div>
+                  <div className="space-y-1">
+                    <p className="text-sm font-black text-white">
+                      Arrastra y suelta tus fotos y videos aquí
+                    </p>
+                    <p className="text-slate-400 text-xs">
+                      o haz clic para explorar tus archivos (Selección múltiple admitida). También puedes presionar <strong>Ctrl + V</strong> para pegar desde el portapapeles.
+                    </p>
+                  </div>
 
-              <div className="flex flex-wrap items-center justify-center gap-2 pt-2 text-[10px] text-slate-500">
-                <span className="px-2.5 py-1 rounded-md bg-slate-900 border border-slate-800 text-purple-300 font-semibold">JPG, PNG, WEBP, GIF</span>
-                <span className="px-2.5 py-1 rounded-md bg-slate-900 border border-slate-800 text-pink-300 font-semibold">MP4, MOV, WEBM</span>
-                <span className="px-2.5 py-1 rounded-md bg-slate-900 border border-slate-800 text-emerald-300 font-semibold">Reels / Shorts</span>
-              </div>
+                  <div className="flex flex-wrap items-center justify-center gap-2 pt-2 text-[10px] text-slate-500">
+                    <span className="px-2.5 py-1 rounded-md bg-slate-900 border border-slate-800 text-purple-300 font-semibold">
+                      JPG, PNG, WEBP, GIF
+                    </span>
+                    <span className="px-2.5 py-1 rounded-md bg-slate-900 border border-slate-800 text-pink-300 font-semibold">
+                      MP4, MOV, WEBM
+                    </span>
+                    <span className="px-2.5 py-1 rounded-md bg-slate-900 border border-slate-800 text-emerald-300 font-semibold">
+                      Reels / Shorts
+                    </span>
+                  </div>
+                </>
+              )}
             </div>
           )}
 
           {/* Tab 2: Bulk URLs Textarea */}
           {activeTab === 'urls' && (
             <div className="bg-slate-950 p-5 rounded-3xl border border-slate-800 space-y-3">
-              <label className="block text-slate-300 font-bold">
-                Pega múltiples URLs de fotos o videos (un enlace por línea):
-              </label>
+              <div className="flex items-center justify-between">
+                <label className="block text-slate-300 font-bold">
+                  Pega múltiples URLs de fotos o videos (un enlace por línea):
+                </label>
+                <span className="text-[10px] text-slate-500">Soporta Unsplash, Drive, Imgur, CDN</span>
+              </div>
               <textarea
                 rows={4}
                 value={urlListText}
@@ -459,7 +619,11 @@ export const BulkMediaImporter: React.FC<BulkMediaImporterProps> = ({
                   <option value="all">Todas las Sucursales</option>
                   {branches.map((b) => (
                     <option key={b.id} value={b.id}>
-                      {b.name.includes('Concordia') ? 'Sucursal Concordia' : b.name.includes('Posadas') ? 'Sucursal Posadas' : b.name}
+                      {b.name.includes('Concordia')
+                        ? 'Sucursal Concordia'
+                        : b.name.includes('Posadas')
+                        ? 'Sucursal Posadas'
+                        : b.name}
                     </option>
                   ))}
                 </select>
@@ -496,7 +660,9 @@ export const BulkMediaImporter: React.FC<BulkMediaImporterProps> = ({
             {/* Tags & Featured row */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-center">
               <div className="sm:col-span-2">
-                <label className="block text-slate-400 font-semibold mb-1">Etiquetas globales (#Tags separados por coma)</label>
+                <label className="block text-slate-400 font-semibold mb-1">
+                  Etiquetas globales (#Tags separados por coma)
+                </label>
                 <input
                   type="text"
                   value={defaultTagsText}
@@ -546,7 +712,9 @@ export const BulkMediaImporter: React.FC<BulkMediaImporterProps> = ({
               <div className="bg-slate-950 border border-slate-800 rounded-2xl p-6 text-center text-slate-500 space-y-2">
                 <Layers className="w-8 h-8 mx-auto text-slate-700" />
                 <p className="font-semibold text-slate-400">No hay archivos en cola todavía</p>
-                <p className="text-[11px]">Arrastra fotos o videos en el recuadro superior para comenzar.</p>
+                <p className="text-[11px]">
+                  Arrastra fotos o videos en el recuadro superior o pega URLs para comenzar.
+                </p>
               </div>
             ) : (
               <div className="space-y-2.5 max-h-[340px] overflow-y-auto pr-1">
@@ -573,13 +741,19 @@ export const BulkMediaImporter: React.FC<BulkMediaImporterProps> = ({
                           </div>
                         )}
                         <span className="absolute top-1 left-1 p-0.5 rounded bg-black/70 text-white text-[9px]">
-                          {item.mediaType === 'photo' ? <Camera className="w-2.5 h-2.5" /> : item.mediaType === 'reel' ? <Film className="w-2.5 h-2.5" /> : <Play className="w-2.5 h-2.5" />}
+                          {item.mediaType === 'photo' ? (
+                            <Camera className="w-2.5 h-2.5" />
+                          ) : item.mediaType === 'reel' ? (
+                            <Film className="w-2.5 h-2.5" />
+                          ) : (
+                            <Play className="w-2.5 h-2.5" />
+                          )}
                         </span>
                       </div>
                     </div>
 
-                    {/* Editable Title */}
-                    <div className="flex-1 w-full sm:w-auto">
+                    {/* Editable Title & Compression stats */}
+                    <div className="flex-1 w-full sm:w-auto space-y-1">
                       <input
                         type="text"
                         value={item.title}
@@ -587,13 +761,29 @@ export const BulkMediaImporter: React.FC<BulkMediaImporterProps> = ({
                         className="w-full bg-slate-900 border border-slate-800 rounded-xl px-2.5 py-1.5 text-white font-bold text-xs focus:outline-none focus:border-purple-500"
                         placeholder="Título del elemento..."
                       />
+                      {item.originalSize && item.compressedSize && item.originalSize > item.compressedSize && (
+                        <div className="flex items-center gap-2 text-[10px] text-emerald-400">
+                          <span>
+                            Optimizado: {formatBytes(item.originalSize)} → {formatBytes(item.compressedSize)}
+                          </span>
+                          <span className="bg-emerald-500/20 px-1.5 py-0.2 rounded font-bold">
+                            -
+                            {Math.round(
+                              ((item.originalSize - item.compressedSize) / item.originalSize) * 100
+                            )}
+                            %
+                          </span>
+                        </div>
+                      )}
                     </div>
 
                     {/* Quick Media Type & Category Dropdowns */}
                     <div className="flex flex-wrap items-center gap-2 shrink-0 w-full sm:w-auto justify-between sm:justify-start">
                       <select
                         value={item.mediaType}
-                        onChange={(e) => handleUpdateItem(item.id, { mediaType: e.target.value as any })}
+                        onChange={(e) =>
+                          handleUpdateItem(item.id, { mediaType: e.target.value as any })
+                        }
                         className="bg-slate-900 border border-slate-800 rounded-xl px-2 py-1.5 text-slate-300 text-xs font-semibold focus:outline-none"
                       >
                         <option value="photo">Foto</option>
@@ -603,7 +793,9 @@ export const BulkMediaImporter: React.FC<BulkMediaImporterProps> = ({
 
                       <select
                         value={item.category}
-                        onChange={(e) => handleUpdateItem(item.id, { category: e.target.value as EventType })}
+                        onChange={(e) =>
+                          handleUpdateItem(item.id, { category: e.target.value as EventType })
+                        }
                         className="bg-slate-900 border border-slate-800 rounded-xl px-2 py-1.5 text-purple-300 text-xs font-semibold focus:outline-none"
                       >
                         {eventCategories.map((c) => (
@@ -663,7 +855,9 @@ export const BulkMediaImporter: React.FC<BulkMediaImporterProps> = ({
           <div className="text-xs text-slate-400">
             {stagedItems.length > 0 ? (
               <span>
-                <strong className="text-white">{stagedItems.length}</strong> archivo{stagedItems.length > 1 ? 's' : ''} preparado{stagedItems.length > 1 ? 's' : ''} para ingresar a la galería.
+                <strong className="text-white">{stagedItems.length}</strong> archivo
+                {stagedItems.length > 1 ? 's' : ''} preparado{stagedItems.length > 1 ? 's' : ''} para
+                ingresar a la galería.
               </span>
             ) : (
               <span>Selecciona archivos para habilitar la importación.</span>

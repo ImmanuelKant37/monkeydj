@@ -82,9 +82,28 @@ function setItem<T>(key: string, val: T): void {
 
 export class AppStorage {
   static initStorage(): void {
+    const MIGRATION_KEY = 'monkeydj_clean_defaults_v2';
+    if (!localStorage.getItem(MIGRATION_KEY)) {
+      // Remove default demo gallery and default demo services as requested
+      localStorage.setItem(STORAGE_KEYS.SERVICES, JSON.stringify([]));
+      localStorage.setItem(STORAGE_KEYS.GALLERY, JSON.stringify([]));
+      localStorage.setItem(MIGRATION_KEY, 'true');
+    }
+
     if (!localStorage.getItem(STORAGE_KEYS.BRANCHES)) {
       setItem(STORAGE_KEYS.BRANCHES, INITIAL_BRANCHES);
     }
+  }
+
+  static clearGallery(): void {
+    setItem(STORAGE_KEYS.GALLERY, []);
+    this.addAuditLog('Admin', 'Galería Vaciada', 'Se eliminaron todas las fotos y videos');
+  }
+
+  static clearServices(): void {
+    setItem(STORAGE_KEYS.SERVICES, []);
+    SupabaseService.saveEntity('services', STORAGE_KEYS.SERVICES, []);
+    this.addAuditLog('Admin', 'Catálogo de Servicios Vaciado', 'Se eliminaron todos los servicios');
   }
 
   static getPackages() {

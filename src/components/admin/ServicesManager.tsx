@@ -14,10 +14,13 @@ import {
   Eye,
   EyeOff,
   Star,
-  Save
+  Save,
+  Zap,
+  Loader2
 } from 'lucide-react';
 import { AppStorage } from '../../services/storage';
 import { ServiceItem } from '../../types';
+import { optimizeImageFile, cleanMediaUrl } from '../../utils/imageOptimizer';
 
 interface ServicesManagerProps {
   onServicesUpdated?: () => void;
@@ -85,7 +88,7 @@ export const ServicesManager: React.FC<ServicesManagerProps> = ({ onServicesUpda
       description: 'Descripción completa del servicio, alcance e inclusiones principales para el evento.',
       basePrice: 50000,
       unit: 'evento',
-      imageUrl: 'https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?auto=format&fit=crop&q=80&w=1000',
+      imageUrl: '',
       videoUrl: '',
       active: true,
       featured: false,
@@ -121,6 +124,13 @@ export const ServicesManager: React.FC<ServicesManagerProps> = ({ onServicesUpda
     showToast('Servicio eliminado del catálogo.');
   };
 
+  const handleClearAllServices = () => {
+    if (window.confirm('¿Estás seguro de que deseas vaciar todos los servicios del catálogo?')) {
+      handleSaveAll([]);
+      showToast('Catálogo de servicios vaciado.');
+    }
+  };
+
   const handleToggleActive = (id: string) => {
     const updated = services.map((s) => (s.id === id ? { ...s, active: !s.active } : s));
     handleSaveAll(updated);
@@ -131,18 +141,20 @@ export const ServicesManager: React.FC<ServicesManagerProps> = ({ onServicesUpda
     handleSaveAll(updated);
   };
 
-  // Image Upload handler (convert to Base64)
-  const handleImageFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // Image Upload handler with auto-compression
+  const handleImageFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file && editingService) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
+      try {
+        const opt = await optimizeImageFile(file, { maxWidth: 1200, maxHeight: 1200, quality: 0.82 });
         setEditingService({
           ...editingService,
-          imageUrl: reader.result as string
+          imageUrl: opt.mediaUrl
         });
-      };
-      reader.readAsDataURL(file);
+        showToast('Imagen cargada y optimizada con éxito.');
+      } catch (err) {
+        showToast('Error al procesar la imagen seleccionada.');
+      }
     }
   };
 
@@ -206,13 +218,26 @@ export const ServicesManager: React.FC<ServicesManagerProps> = ({ onServicesUpda
           </p>
         </div>
 
-        <button
-          onClick={handleCreateNew}
-          className="py-3 px-5 rounded-2xl bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white font-black text-xs shadow-lg shadow-purple-600/30 flex items-center justify-center gap-2 cursor-pointer transition-all transform hover:scale-105"
-        >
-          <Plus className="w-4 h-4" />
-          <span>AGREGAR NUEVO SERVICIO</span>
-        </button>
+        <div className="flex flex-wrap items-center gap-3">
+          {services.length > 0 && (
+            <button
+              onClick={handleClearAllServices}
+              className="py-3 px-4 rounded-2xl bg-rose-950/70 hover:bg-rose-900 border border-rose-500/40 text-rose-300 font-bold text-xs flex items-center justify-center gap-2 cursor-pointer transition-all"
+              title="Vaciar catálogo de servicios"
+            >
+              <Trash2 className="w-4 h-4" />
+              <span className="hidden sm:inline">VACIAR SERVICIOS</span>
+            </button>
+          )}
+
+          <button
+            onClick={handleCreateNew}
+            className="py-3 px-5 rounded-2xl bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white font-black text-xs shadow-lg shadow-purple-600/30 flex items-center justify-center gap-2 cursor-pointer transition-all transform hover:scale-105"
+          >
+            <Plus className="w-4 h-4" />
+            <span>AGREGAR NUEVO SERVICIO</span>
+          </button>
+        </div>
       </div>
 
       {/* Search and Category Filter Bar */}
@@ -247,9 +272,33 @@ export const ServicesManager: React.FC<ServicesManagerProps> = ({ onServicesUpda
         </div>
       </div>
 
-      {/* Services Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {filteredServices.map((service) => (
+      {/* Services Grid or Empty State */}
+      {filteredServices.length === 0 ? (
+        <div className="bg-slate-900 border border-slate-800 rounded-3xl p-12 text-center max-w-xl mx-auto space-y-4">
+          <div className="w-16 h-16 rounded-full bg-purple-600/20 text-purple-400 border border-purple-500/30 flex items-center justify-center mx-auto">
+            <Sparkles className="w-8 h-8" />
+          </div>
+          <div className="space-y-1">
+            <h3 className="text-lg font-black text-white">No hay servicios en el catálogo</h3>
+            <p className="text-xs text-slate-400">
+              {services.length === 0
+                ? 'El catálogo de servicios está limpio. Puedes crear tus propios servicios personalizados.'
+                : 'No se encontraron servicios que coincidan con la categoría o búsqueda seleccionada.'}
+            </p>
+          </div>
+          <div className="pt-2">
+            <button
+              onClick={handleCreateNew}
+              className="py-2.5 px-5 rounded-xl bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white font-bold text-xs shadow-lg inline-flex items-center gap-2 cursor-pointer transition-all"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Crear Primer Servicio</span>
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {filteredServices.map((service) => (
           <div
             key={service.id}
             className={`bg-slate-900 border ${
@@ -371,6 +420,7 @@ export const ServicesManager: React.FC<ServicesManagerProps> = ({ onServicesUpda
           </div>
         ))}
       </div>
+      )}
 
       {/* Delete Confirmation Modal */}
       {deleteConfirmId && (
@@ -566,11 +616,11 @@ export const ServicesManager: React.FC<ServicesManagerProps> = ({ onServicesUpda
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-center">
                   <div className="sm:col-span-2 space-y-2">
                     <input
-                      type="url"
+                      type="text"
                       value={editingService.imageUrl}
                       onChange={(e) => setEditingService({ ...editingService, imageUrl: e.target.value })}
                       className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-white text-xs focus:outline-none focus:border-purple-500"
-                      placeholder="https://images.unsplash.com/..."
+                      placeholder="https://images.unsplash.com/ o sube un archivo"
                     />
                     <div className="flex items-center gap-2">
                       <label className="py-2 px-3 bg-purple-600/20 hover:bg-purple-600/30 border border-purple-500/40 rounded-xl text-purple-300 font-bold text-xs flex items-center gap-2 cursor-pointer transition-all">
