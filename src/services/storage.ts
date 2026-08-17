@@ -269,7 +269,11 @@ export class AppStorage {
   }
 
   static getGallery(): GalleryItem[] {
-    return getItem(STORAGE_KEYS.GALLERY, INITIAL_GALLERY);
+    const data = getItem<GalleryItem[]>(STORAGE_KEYS.GALLERY, INITIAL_GALLERY);
+    if (!data || data.length === 0) {
+      return INITIAL_GALLERY;
+    }
+    return data;
   }
   static saveGallery(data: GalleryItem[]): void {
     setItem(STORAGE_KEYS.GALLERY, data);

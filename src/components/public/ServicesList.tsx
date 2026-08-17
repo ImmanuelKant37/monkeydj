@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { ServiceItem, ServicePackage, SiteContent } from '../../types';
 import { AppStorage } from '../../services/storage';
+import { getPreviewEffectStyles } from '../../utils/previewEffects';
 
 interface ServicesListProps {
   services?: ServiceItem[];
@@ -36,6 +37,8 @@ export const ServicesList: React.FC<ServicesListProps> = ({
   const content = propContent || AppStorage.getSiteContent();
   const [activeCategory, setActiveCategory] = useState<string>('todos');
   const [selectedModalService, setSelectedModalService] = useState<ServiceItem | null>(null);
+
+  const servicesPreviewStyles = getPreviewEffectStyles(content, { scope: 'services' });
 
   const availableServices = services && services.length > 0 ? services : AppStorage.getServices();
 
@@ -103,9 +106,10 @@ export const ServicesList: React.FC<ServicesListProps> = ({
                   <img
                     src={service.imageUrl}
                     alt={service.name}
-                    className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500 filter brightness-90"
+                    className={`w-full h-full object-cover filter brightness-90 ${servicesPreviewStyles.className}`}
+                    style={servicesPreviewStyles.style}
                   />
-                  <div className="absolute inset-0 bg-gradient-to-t from-[#050508] via-transparent to-transparent"></div>
+                  <div className="absolute inset-0 bg-gradient-to-t from-[#050508] via-transparent to-transparent pointer-events-none"></div>
                   
                   {service.featured && (
                     <span className="absolute top-3 left-3 bg-blue-500/30 text-blue-300 border border-blue-400/50 backdrop-blur-md text-[10px] font-bold px-3 py-1 rounded-full uppercase tracking-wider shadow-lg">

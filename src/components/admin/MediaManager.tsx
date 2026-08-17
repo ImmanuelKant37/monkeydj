@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   Sparkles,
   Plus,
@@ -16,7 +16,12 @@ import {
   Tag,
   Layers,
   UploadCloud,
-  Upload
+  Calendar,
+  MapPin,
+  Clock,
+  ArrowUpDown,
+  Filter,
+  Navigation
 } from 'lucide-react';
 import { AppStorage } from '../../services/storage';
 import { GalleryItem, EventType } from '../../types';
@@ -27,11 +32,16 @@ interface MediaManagerProps {
   onGalleryUpdated?: () => void;
 }
 
+type SortOption = 'recent' | 'oldest' | 'nearest' | 'location' | 'category' | 'featured';
+
 export const MediaManager: React.FC<MediaManagerProps> = ({ onGalleryUpdated }) => {
   const [gallery, setGallery] = useState<GalleryItem[]>(AppStorage.getGallery());
   const [branches] = useState(AppStorage.getBranches());
   const [selectedBranch, setSelectedBranch] = useState<string>('todos');
   const [selectedType, setSelectedType] = useState<string>('todos');
+  const [selectedLocation, setSelectedLocation] = useState<string>('todos');
+  const [selectedYear, setSelectedYear] = useState<string>('todos');
+  const [sortBy, setSortBy] = useState<SortOption>('recent');
   const [searchQuery, setSearchQuery] = useState('');
   const [editingItem, setEditingItem] = useState<GalleryItem | null>(null);
   const [isCreating, setIsCreating] = useState(false);
@@ -65,23 +75,104 @@ export const MediaManager: React.FC<MediaManagerProps> = ({ onGalleryUpdated }) 
     'Otro'
   ];
 
-  const filteredItems = gallery.filter((item) => {
-    const matchesBranch =
-      selectedBranch === 'todos' ||
-      !item.branchId ||
-      item.branchId === 'all' ||
-      item.branchId === 'todas' ||
-      item.branchId === selectedBranch;
+  // Extract unique locations from gallery for filtering
+  const uniqueLocations = useMemo(() => {
+    const set = new Set<string>();
+    gallery.forEach((g) => {
+      if (g.location && g.location.trim()) {
+        set.add(g.location.trim());
+      }
+    });
+    return Array.from(set).sort();
+  }, [gallery]);
 
-    const matchesType = selectedType === 'todos' || item.mediaType === selectedType;
+  // Extract unique years from gallery for filtering
+  const uniqueYears = useMemo(() => {
+    const set = new Set<string>();
+    gallery.forEach((g) => {
+      if (g.date) {
+        const yr = g.date.split('-')[0];
+        if (yr && yr.length === 4) {
+          set.add(yr);
+        }
+      }
+    });
+    return Array.from(set).sort((a, b) => b.localeCompare(a));
+  }, [gallery]);
 
-    const matchesSearch =
-      item.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (item.eventTitle && item.eventTitle.toLowerCase().includes(searchQuery.toLowerCase())) ||
-      item.category.toLowerCase().includes(searchQuery.toLowerCase());
+  // Sorting & Filtering logic
+  const filteredAndSortedItems = useMemo(() => {
+    const now = new Date().getTime();
 
-    return matchesBranch && matchesType && matchesSearch;
-  });
+    // 1. Filter
+    const filtered = gallery.filter((item) => {
+      const matchesBranch =
+        selectedBranch === 'todos' ||
+        !item.branchId ||
+        item.branchId === 'all' ||
+        item.branchId === 'todas' ||
+        item.branchId === selectedBranch;
+
+      const matchesType = selectedType === 'todos' || item.mediaType === selectedType;
+
+      const matchesLocation =
+        selectedLocation === 'todos' ||
+        (item.location && item.location.toLowerCase().includes(selectedLocation.toLowerCase()));
+
+      const matchesYear =
+        selectedYear === 'todos' ||
+        (item.date && item.date.startsWith(selectedYear));
+
+      const matchesSearch =
+        item.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (item.eventTitle && item.eventTitle.toLowerCase().includes(searchQuery.toLowerCase())) ||
+        (item.location && item.location.toLowerCase().includes(searchQuery.toLowerCase())) ||
+        (item.venue && item.venue.toLowerCase().includes(searchQuery.toLowerCase())) ||
+        item.category.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (item.date && item.date.includes(searchQuery));
+
+      return matchesBranch && matchesType && matchesLocation && matchesYear && matchesSearch;
+    });
+
+    // 2. Sort
+    return filtered.sort((a, b) => {
+      if (sortBy === 'featured') {
+        if (a.featured !== b.featured) return a.featured ? -1 : 1;
+        // Fallback to recent date
+        return (b.date || '').localeCompare(a.date || '');
+      }
+
+      if (sortBy === 'location') {
+        const locA = (a.location || '').toLowerCase();
+        const locB = (b.location || '').toLowerCase();
+        return locA.localeCompare(locB);
+      }
+
+      if (sortBy === 'category') {
+        return a.category.localeCompare(b.category);
+      }
+
+      if (sortBy === 'oldest') {
+        const dateA = a.date || '1970-01-01';
+        const dateB = b.date || '1970-01-01';
+        return dateA.localeCompare(dateB);
+      }
+
+      if (sortBy === 'nearest') {
+        // Sort by closest absolute difference to today
+        const timeA = a.date ? new Date(a.date).getTime() : 0;
+        const timeB = b.date ? new Date(b.date).getTime() : 0;
+        const diffA = Math.abs(now - timeA);
+        const diffB = Math.abs(now - timeB);
+        return diffA - diffB;
+      }
+
+      // Default: 'recent' (descending date)
+      const dateA = a.date || '1970-01-01';
+      const dateB = b.date || '1970-01-01';
+      return dateB.localeCompare(dateA);
+    });
+  }, [gallery, selectedBranch, selectedType, selectedLocation, selectedYear, searchQuery, sortBy]);
 
   const showToast = (msg: string) => {
     setSuccessToast(msg);
@@ -95,6 +186,7 @@ export const MediaManager: React.FC<MediaManagerProps> = ({ onGalleryUpdated }) 
   };
 
   const handleCreateNew = () => {
+    const today = new Date().toISOString().split('T')[0];
     const newItem: GalleryItem = {
       id: `gal-${Date.now()}`,
       title: 'Nueva Producción Audiovisual',
@@ -103,6 +195,9 @@ export const MediaManager: React.FC<MediaManagerProps> = ({ onGalleryUpdated }) 
       mediaUrl: '',
       thumbnailUrl: '',
       category: 'Casamiento',
+      date: today,
+      location: 'Concordia, Entre Ríos',
+      venue: 'Salón Principal',
       tags: ['MonkeyDJ', 'ProduccionLive'],
       featured: true,
       branchId: 'all'
@@ -191,17 +286,17 @@ export const MediaManager: React.FC<MediaManagerProps> = ({ onGalleryUpdated }) 
       )}
 
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-2 text-purple-400 text-xs font-bold uppercase tracking-wider mb-1">
             <Camera className="w-4 h-4" />
-            <span>Portafolio Audiovisual & Reels</span>
+            <span>Portafolio Audiovisual, Reels & Línea del Tiempo</span>
           </div>
           <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight">
-            GESTIÓN DE GALERÍA DE FOTOS Y VIDEOS
+            GESTIÓN DE GALERÍA Y CLASIFICACIÓN
           </h1>
           <p className="text-xs text-slate-400">
-            Administra fotos, reels y videos. Asigna contenido por sucursal (Concordia / Posadas / Todas) para personalizar el inicio.
+            Clasifica tus producciones por fecha (año/mes), cercanía temporal y lugar (Concordia, Posadas o salones).
           </p>
         </div>
 
@@ -235,30 +330,111 @@ export const MediaManager: React.FC<MediaManagerProps> = ({ onGalleryUpdated }) 
         </div>
       </div>
 
-      {/* Filters Bar */}
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 flex flex-col md:flex-row gap-4 justify-between items-center">
-        {/* Search Input */}
-        <div className="relative w-full md:w-72">
-          <Search className="w-4 h-4 text-slate-500 absolute left-3.5 top-3" />
-          <input
-            type="text"
-            placeholder="Buscar por título o evento..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-10 pr-4 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-purple-500"
-          />
+      {/* Advanced Filters & Sorting Bar */}
+      <div className="bg-slate-900 border border-slate-800 rounded-3xl p-5 space-y-4 shadow-xl">
+        <div className="flex flex-col lg:flex-row gap-3 justify-between items-start lg:items-center">
+          
+          {/* Search Input */}
+          <div className="relative w-full lg:w-80">
+            <Search className="w-4 h-4 text-slate-500 absolute left-3.5 top-3" />
+            <input
+              type="text"
+              placeholder="Buscar por título, lugar, fecha, evento..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-10 pr-4 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-purple-500"
+            />
+          </div>
+
+          {/* Quick Counts Indicator */}
+          <div className="flex items-center gap-2 text-xs text-slate-400">
+            <span className="font-bold text-white">{filteredAndSortedItems.length}</span> de <span className="text-slate-300">{gallery.length} producciones</span>
+            {filteredAndSortedItems.length < gallery.length && (
+              <button
+                onClick={() => {
+                  setSelectedBranch('todos');
+                  setSelectedType('todos');
+                  setSelectedLocation('todos');
+                  setSelectedYear('todos');
+                  setSearchQuery('');
+                }}
+                className="text-purple-400 hover:underline ml-2 cursor-pointer"
+              >
+                Limpiar filtros
+              </button>
+            )}
+          </div>
         </div>
 
-        {/* Branch & Type Selectors */}
-        <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
-          {/* Branch Filter */}
-          <div className="flex items-center gap-1.5 bg-slate-950 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-slate-300">
-            <Building2 className="w-4 h-4 text-purple-400" />
-            <span className="font-semibold text-slate-400">Sucursal:</span>
+        {/* Classification & Filter Controls Grid */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 pt-2 border-t border-slate-800">
+          
+          {/* 1. Sort Option (Clasificar Por) */}
+          <div className="bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs flex flex-col justify-center">
+            <span className="text-[10px] font-extrabold uppercase text-purple-400 tracking-wider flex items-center gap-1 mb-1">
+              <ArrowUpDown className="w-3 h-3 text-purple-400" /> Clasificar Por:
+            </span>
+            <select
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value as SortOption)}
+              className="bg-transparent text-white font-bold focus:outline-none cursor-pointer w-full text-xs"
+            >
+              <option value="recent" className="bg-slate-900 text-white">📅 Fecha: Más Reciente</option>
+              <option value="oldest" className="bg-slate-900 text-white">📅 Fecha: Más Antigua</option>
+              <option value="nearest" className="bg-slate-900 text-white">⚡ Fecha: Cercana a Hoy</option>
+              <option value="location" className="bg-slate-900 text-white">📍 Lugar / Ciudad (A-Z)</option>
+              <option value="category" className="bg-slate-900 text-white">🏷️ Categoría de Evento</option>
+              <option value="featured" className="bg-slate-900 text-white">⭐ Destacados Primero</option>
+            </select>
+          </div>
+
+          {/* 2. Location / Lugar Filter */}
+          <div className="bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs flex flex-col justify-center">
+            <span className="text-[10px] font-extrabold uppercase text-pink-400 tracking-wider flex items-center gap-1 mb-1">
+              <MapPin className="w-3 h-3 text-pink-400" /> Filtrar por Lugar:
+            </span>
+            <select
+              value={selectedLocation}
+              onChange={(e) => setSelectedLocation(e.target.value)}
+              className="bg-transparent text-white font-bold focus:outline-none cursor-pointer w-full text-xs"
+            >
+              <option value="todos" className="bg-slate-900 text-white">Todos los Lugares ({uniqueLocations.length})</option>
+              {uniqueLocations.map((loc) => (
+                <option key={loc} value={loc} className="bg-slate-900 text-white">
+                  📍 {loc}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* 3. Year / Fecha Filter */}
+          <div className="bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs flex flex-col justify-center">
+            <span className="text-[10px] font-extrabold uppercase text-blue-400 tracking-wider flex items-center gap-1 mb-1">
+              <Calendar className="w-3 h-3 text-blue-400" /> Filtrar por Año:
+            </span>
+            <select
+              value={selectedYear}
+              onChange={(e) => setSelectedYear(e.target.value)}
+              className="bg-transparent text-white font-bold focus:outline-none cursor-pointer w-full text-xs"
+            >
+              <option value="todos" className="bg-slate-900 text-white">Todos los Años</option>
+              {uniqueYears.map((yr) => (
+                <option key={yr} value={yr} className="bg-slate-900 text-white">
+                  Año {yr}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* 4. Branch / Sucursal Filter */}
+          <div className="bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs flex flex-col justify-center">
+            <span className="text-[10px] font-extrabold uppercase text-amber-400 tracking-wider flex items-center gap-1 mb-1">
+              <Building2 className="w-3 h-3 text-amber-400" /> Sucursal:
+            </span>
             <select
               value={selectedBranch}
               onChange={(e) => setSelectedBranch(e.target.value)}
-              className="bg-transparent text-white font-bold focus:outline-none cursor-pointer"
+              className="bg-transparent text-white font-bold focus:outline-none cursor-pointer w-full text-xs"
             >
               <option value="todos" className="bg-slate-900 text-white">Todas las Sucursales</option>
               {branches.map((b) => (
@@ -269,13 +445,13 @@ export const MediaManager: React.FC<MediaManagerProps> = ({ onGalleryUpdated }) 
             </select>
           </div>
 
-          {/* Media Type Filter */}
-          <div className="flex items-center gap-1 bg-slate-950 border border-slate-800 rounded-xl p-1 text-xs">
+          {/* 5. Media Type Buttons */}
+          <div className="bg-slate-950 border border-slate-800 rounded-xl p-1.5 text-xs flex items-center justify-between gap-1">
             {['todos', 'photo', 'video', 'reel'].map((type) => (
               <button
                 key={type}
                 onClick={() => setSelectedType(type)}
-                className={`px-2.5 py-1 rounded-lg font-bold capitalize transition-all cursor-pointer ${
+                className={`flex-1 py-1.5 rounded-lg font-bold capitalize text-center transition-all cursor-pointer text-[11px] ${
                   selectedType === type
                     ? 'bg-purple-600 text-white shadow-md'
                     : 'text-slate-400 hover:text-white'
@@ -285,44 +461,50 @@ export const MediaManager: React.FC<MediaManagerProps> = ({ onGalleryUpdated }) 
               </button>
             ))}
           </div>
+
         </div>
       </div>
 
       {/* Gallery Cards Grid */}
-      {filteredItems.length === 0 ? (
-        <div className="bg-slate-900 border border-slate-800 rounded-3xl p-12 text-center max-w-xl mx-auto space-y-4">
+      {filteredAndSortedItems.length === 0 ? (
+        <div className="bg-slate-900 border border-slate-800 rounded-3xl p-12 text-center max-w-xl mx-auto space-y-4 shadow-xl">
           <div className="w-16 h-16 rounded-full bg-purple-600/20 text-purple-400 border border-purple-500/30 flex items-center justify-center mx-auto">
             <Camera className="w-8 h-8" />
           </div>
           <div className="space-y-1">
-            <h3 className="text-lg font-black text-white">No se encontraron elementos en la galería</h3>
+            <h3 className="text-lg font-black text-white">No se encontraron elementos con esta clasificación</h3>
             <p className="text-xs text-slate-400">
-              No hay fotos o videos que coincidan con la búsqueda o filtro seleccionado. Puedes subir nuevo material masivamente.
+              Prueba cambiando el filtro de fecha, lugar o búsqueda, o sube nuevo material audiovisual.
             </p>
           </div>
           <div className="flex flex-wrap justify-center gap-3 pt-2">
             <button
-              onClick={() => setIsBulkImportOpen(true)}
-              className="py-2.5 px-4 rounded-xl bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 text-white font-bold text-xs shadow-lg flex items-center gap-2 cursor-pointer transition-all"
+              onClick={() => {
+                setSelectedBranch('todos');
+                setSelectedType('todos');
+                setSelectedLocation('todos');
+                setSelectedYear('todos');
+                setSearchQuery('');
+              }}
+              className="py-2.5 px-4 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs shadow-lg flex items-center gap-2 cursor-pointer transition-all"
             >
-              <UploadCloud className="w-4 h-4" />
-              <span>Importador Masivo Drag & Drop</span>
+              <span>Restablecer Filtros</span>
             </button>
             <button
               onClick={handleCreateNew}
               className="py-2.5 px-4 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs flex items-center gap-2 cursor-pointer transition-all"
             >
               <Plus className="w-4 h-4" />
-              <span>Agregar Uno Individual</span>
+              <span>Agregar Producción</span>
             </button>
           </div>
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filteredItems.map((item) => (
+          {filteredAndSortedItems.map((item) => (
             <div
               key={item.id}
-              className="bg-slate-900 border border-slate-800 hover:border-purple-500/50 rounded-3xl overflow-hidden shadow-xl flex flex-col justify-between transition-all group"
+              className="bg-slate-900 border border-slate-800 hover:border-purple-500/50 rounded-3xl overflow-hidden shadow-xl flex flex-col justify-between transition-all group hover:shadow-purple-950/40"
             >
               <div>
                 {/* Media Preview Container */}
@@ -352,89 +534,108 @@ export const MediaManager: React.FC<MediaManagerProps> = ({ onGalleryUpdated }) 
                       )}
                     </span>
 
-                    {item.featured && (
-                      <span className="bg-amber-500 text-slate-950 font-black text-[10px] px-2 py-0.5 rounded-lg flex items-center gap-1">
-                        <Star className="w-3 h-3 fill-slate-950" /> DESTACADO
-                      </span>
-                    )}
+                    <span className="bg-slate-900/80 backdrop-blur-md text-slate-200 font-bold text-[10px] px-2.5 py-0.5 rounded-lg uppercase border border-white/10">
+                      {item.category}
+                    </span>
                   </div>
 
-                  {/* Branch Badge */}
-                  <div className="absolute bottom-3 left-3">
-                    <span className="bg-purple-900/80 backdrop-blur-md text-purple-200 border border-purple-500/40 text-[10px] font-bold px-2 py-0.5 rounded-lg flex items-center gap-1">
-                      <Building2 className="w-3 h-3 text-purple-300" />
-                      <span>{getBranchLabel(item.branchId)}</span>
+                  {/* Featured Button */}
+                  <button
+                    onClick={() => handleToggleFeatured(item.id)}
+                    className={`absolute top-3 right-3 p-2 rounded-xl backdrop-blur-md transition-all cursor-pointer ${
+                      item.featured
+                        ? 'bg-amber-500 text-white shadow-lg shadow-amber-500/30'
+                        : 'bg-black/50 text-slate-400 hover:text-white'
+                    }`}
+                    title={item.featured ? 'Destacado en el Inicio' : 'Marcar como Destacado'}
+                  >
+                    <Star className="w-4 h-4 fill-current" />
+                  </button>
+
+                  {/* Branch Pill */}
+                  <div className="absolute bottom-3 left-3 flex flex-wrap gap-1.5">
+                    <span className="bg-purple-950/80 backdrop-blur-md text-purple-300 font-medium text-[10px] px-2 py-0.5 rounded-md border border-purple-800/50 flex items-center gap-1">
+                      <Building2 className="w-3 h-3" />
+                      {getBranchLabel(item.branchId)}
                     </span>
                   </div>
                 </div>
 
-                {/* Info Body */}
-                <div className="p-5 space-y-2">
-                  <div className="flex justify-between items-center">
-                    <span className="text-[10px] font-bold text-purple-400 uppercase tracking-wider">
-                      {item.category}
-                    </span>
-                    {item.eventTitle && (
-                      <span className="text-[10px] text-slate-400 italic">
-                        {item.eventTitle}
+                {/* Card Content & Classification Badges */}
+                <div className="p-4 space-y-3">
+                  {/* Date & Location Chips */}
+                  <div className="flex flex-wrap items-center gap-2 text-[11px]">
+                    {item.date ? (
+                      <span className="inline-flex items-center gap-1 text-purple-300 font-bold bg-purple-950/50 px-2.5 py-1 rounded-lg border border-purple-800/40">
+                        <Calendar className="w-3 h-3 text-purple-400" />
+                        {item.date}
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 text-slate-500 font-medium bg-slate-950 px-2 py-0.5 rounded-md border border-slate-800 text-[10px]">
+                        <Clock className="w-2.5 h-2.5" /> Sin fecha
+                      </span>
+                    )}
+
+                    {item.location && (
+                      <span className="inline-flex items-center gap-1 text-pink-300 font-semibold bg-pink-950/40 px-2.5 py-1 rounded-lg border border-pink-800/40 truncate max-w-[170px]" title={item.location}>
+                        <MapPin className="w-3 h-3 text-pink-400 shrink-0" />
+                        <span className="truncate">{item.location}</span>
                       </span>
                     )}
                   </div>
 
-                  <h3 className="font-extrabold text-white text-base leading-snug group-hover:text-purple-300 transition-colors">
-                    {item.title}
-                  </h3>
+                  <div>
+                    {item.eventTitle && (
+                      <p className="text-[11px] font-semibold text-purple-400 uppercase tracking-wide truncate">
+                        {item.eventTitle} {item.venue ? `• ${item.venue}` : ''}
+                      </p>
+                    )}
+                    <h3 className="font-extrabold text-sm text-white line-clamp-1 group-hover:text-purple-300 transition-colors">
+                      {item.title}
+                    </h3>
+                  </div>
 
                   {/* Tags */}
                   {item.tags && item.tags.length > 0 && (
                     <div className="flex flex-wrap gap-1 pt-1">
-                      {item.tags.map((t, idx) => (
+                      {item.tags.slice(0, 3).map((t, idx) => (
                         <span
                           key={idx}
-                          className="text-[9px] px-2 py-0.5 rounded bg-slate-950 text-slate-400 border border-slate-800"
+                          className="text-[10px] px-2 py-0.5 rounded-md bg-slate-950 text-slate-400 border border-slate-800"
                         >
                           #{t}
                         </span>
                       ))}
+                      {item.tags.length > 3 && (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-slate-950 text-slate-500">
+                          +{item.tags.length - 3}
+                        </span>
+                      )}
                     </div>
                   )}
                 </div>
               </div>
 
-              {/* Actions Bar */}
-              <div className="p-4 bg-slate-950/60 border-t border-slate-800/80 flex items-center justify-between gap-2">
+              {/* Actions Footer */}
+              <div className="p-4 pt-2 border-t border-slate-800/80 flex items-center justify-between gap-2">
                 <button
-                  onClick={() => handleToggleFeatured(item.id)}
-                  className={`p-2 rounded-xl border text-xs font-bold transition-all cursor-pointer ${
-                    item.featured
-                      ? 'bg-amber-500/20 text-amber-300 border-amber-500/40'
-                      : 'bg-slate-800 text-slate-400 border-slate-700 hover:text-white'
-                  }`}
-                  title="Destacar en portada"
+                  onClick={() => {
+                    setEditingItem(item);
+                    setIsCreating(false);
+                  }}
+                  className="flex-1 py-2 px-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs flex items-center justify-center gap-1.5 cursor-pointer transition-colors"
                 >
-                  <Star className={`w-4 h-4 ${item.featured ? 'fill-amber-300' : ''}`} />
+                  <Edit2 className="w-3.5 h-3.5 text-purple-400" />
+                  <span>Editar y Clasificar</span>
                 </button>
 
-                <div className="flex items-center gap-1.5">
-                  <button
-                    onClick={() => {
-                      setEditingItem(item);
-                      setIsCreating(false);
-                    }}
-                    className="px-3 py-2 rounded-xl bg-purple-600/20 hover:bg-purple-600/30 text-purple-300 border border-purple-500/30 font-bold text-xs flex items-center gap-1 transition-all cursor-pointer"
-                  >
-                    <Edit2 className="w-3.5 h-3.5" />
-                    <span>Editar</span>
-                  </button>
-
-                  <button
-                    onClick={() => setDeleteConfirmId(item.id)}
-                    className="p-2 rounded-xl bg-rose-600/20 hover:bg-rose-600/30 text-rose-400 border border-rose-500/30 transition-all cursor-pointer"
-                    title="Eliminar elemento"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
-                </div>
+                <button
+                  onClick={() => setDeleteConfirmId(item.id)}
+                  className="p-2 rounded-xl bg-slate-800 hover:bg-rose-900/60 text-slate-400 hover:text-rose-300 cursor-pointer transition-colors"
+                  title="Eliminar de la Galería"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
               </div>
             </div>
           ))}
@@ -456,7 +657,7 @@ export const MediaManager: React.FC<MediaManagerProps> = ({ onGalleryUpdated }) 
             </div>
             <h3 className="font-extrabold text-lg text-white">¿Eliminar este elemento?</h3>
             <p className="text-xs text-slate-400">
-              Esta foto o video ya no se mostrará en la galería de inicio.
+              Esta foto o video ya no se mostrará en la galería ni en la línea del tiempo.
             </p>
             <div className="flex gap-3 pt-2">
               <button
@@ -487,7 +688,7 @@ export const MediaManager: React.FC<MediaManagerProps> = ({ onGalleryUpdated }) 
         >
           <div
             onClick={(e) => e.stopPropagation()}
-            className="bg-slate-900 border border-purple-500/40 rounded-3xl max-w-2xl w-full p-5 sm:p-8 text-white relative shadow-2xl my-auto max-h-[92vh] flex flex-col cursor-default"
+            className="bg-slate-900 border border-purple-500/40 rounded-3xl max-w-3xl w-full p-5 sm:p-8 text-white relative shadow-2xl my-auto max-h-[92vh] flex flex-col cursor-default"
           >
             {/* Header */}
             <div className="flex items-center justify-between pb-4 border-b border-slate-800 shrink-0 mb-4">
@@ -497,10 +698,10 @@ export const MediaManager: React.FC<MediaManagerProps> = ({ onGalleryUpdated }) 
                 </div>
                 <div>
                   <h2 className="text-lg font-black text-white">
-                    {isCreating ? 'NUEVO ELEMENTO DE GALERÍA' : `EDITAR MULTIMEDIA: ${editingItem.title}`}
+                    {isCreating ? 'NUEVO ELEMENTO DE GALERÍA' : `EDITAR & CLASIFICAR: ${editingItem.title}`}
                   </h2>
                   <p className="text-xs text-slate-400">
-                    Configura imagen, reel o video, categoría del evento y sucursal.
+                    Configura fecha, lugar, tipo de contenido, miniatura y etiquetas para la línea del tiempo y filtros.
                   </p>
                 </div>
               </div>
@@ -517,6 +718,7 @@ export const MediaManager: React.FC<MediaManagerProps> = ({ onGalleryUpdated }) 
 
             {/* Scrollable Form Body */}
             <form onSubmit={handleSaveModal} className="flex-1 overflow-y-auto space-y-4 pr-1 text-xs">
+              
               {/* Title & Event Title */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
@@ -526,19 +728,102 @@ export const MediaManager: React.FC<MediaManagerProps> = ({ onGalleryUpdated }) 
                     required
                     value={editingItem.title}
                     onChange={(e) => setEditingItem({ ...editingItem, title: e.target.value })}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-white focus:outline-none focus:border-purple-500"
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-white focus:outline-none focus:border-purple-500 font-medium"
                     placeholder="Ej. Boda Inolvidable en Estancia La Sofía"
                   />
                 </div>
                 <div>
-                  <label className="block text-slate-300 font-semibold mb-1">Título del Evento / Salón</label>
+                  <label className="block text-slate-300 font-semibold mb-1">Título del Evento / Pareja / Homenajeado</label>
                   <input
                     type="text"
                     value={editingItem.eventTitle || ''}
                     onChange={(e) => setEditingItem({ ...editingItem, eventTitle: e.target.value })}
                     className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-white focus:outline-none focus:border-purple-500"
-                    placeholder="Ej. Boda Valeria & Gonzalo - Salón Concordia"
+                    placeholder="Ej. Boda Valeria & Gonzalo"
                   />
+                </div>
+              </div>
+
+              {/* CLASSIFICATION BLOCK: Date, Location & Venue */}
+              <div className="p-4 rounded-2xl bg-slate-950 border border-purple-500/30 space-y-3">
+                <div className="flex items-center gap-2 text-purple-400 font-bold text-xs uppercase tracking-wider">
+                  <Calendar className="w-4 h-4 text-purple-400" />
+                  <span>Clasificación Temporal & Geográfica (Línea del Tiempo)</span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  {/* Date Input */}
+                  <div>
+                    <label className="block text-slate-300 font-semibold mb-1">Fecha del Evento (Año-Mes-Día) *</label>
+                    <div className="relative">
+                      <input
+                        type="date"
+                        required
+                        value={editingItem.date || ''}
+                        onChange={(e) => setEditingItem({ ...editingItem, date: e.target.value })}
+                        className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-purple-500 font-bold"
+                      />
+                    </div>
+                    {/* Quick date helpers */}
+                    <div className="flex gap-1.5 pt-1.5">
+                      <button
+                        type="button"
+                        onClick={() => setEditingItem({ ...editingItem, date: new Date().toISOString().split('T')[0] })}
+                        className="text-[10px] px-2 py-0.5 rounded bg-slate-900 hover:bg-slate-800 text-purple-300 border border-slate-800 cursor-pointer"
+                      >
+                        Hoy
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const d = new Date();
+                          d.setMonth(d.getMonth() - 1);
+                          setEditingItem({ ...editingItem, date: d.toISOString().split('T')[0] });
+                        }}
+                        className="text-[10px] px-2 py-0.5 rounded bg-slate-900 hover:bg-slate-800 text-slate-400 border border-slate-800 cursor-pointer"
+                      >
+                        Mes Pasado
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Location Input */}
+                  <div>
+                    <label className="block text-slate-300 font-semibold mb-1">Lugar / Ciudad *</label>
+                    <input
+                      type="text"
+                      required
+                      value={editingItem.location || ''}
+                      onChange={(e) => setEditingItem({ ...editingItem, location: e.target.value })}
+                      className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-purple-500"
+                      placeholder="Ej. Concordia, Entre Ríos"
+                    />
+                    {/* Location quick chips */}
+                    <div className="flex gap-1 pt-1.5 flex-wrap">
+                      {['Concordia', 'Posadas', 'Federación', 'Chajarí'].map((loc) => (
+                        <button
+                          key={loc}
+                          type="button"
+                          onClick={() => setEditingItem({ ...editingItem, location: loc.includes('Concordia') || loc.includes('Federación') || loc.includes('Chajarí') ? `${loc}, Entre Ríos` : `${loc}, Misiones` })}
+                          className="text-[10px] px-1.5 py-0.5 rounded bg-slate-900 hover:bg-slate-800 text-pink-300 border border-slate-800 cursor-pointer"
+                        >
+                          {loc}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Venue Input */}
+                  <div>
+                    <label className="block text-slate-300 font-semibold mb-1">Salón / Espacio (Venue)</label>
+                    <input
+                      type="text"
+                      value={editingItem.venue || ''}
+                      onChange={(e) => setEditingItem({ ...editingItem, venue: e.target.value })}
+                      className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-purple-500"
+                      placeholder="Ej. Salón Grand Palace / Estancia La Sofía"
+                    />
+                  </div>
                 </div>
               </div>
 
@@ -551,7 +836,7 @@ export const MediaManager: React.FC<MediaManagerProps> = ({ onGalleryUpdated }) 
                     onChange={(e) =>
                       setEditingItem({ ...editingItem, mediaType: e.target.value as any })
                     }
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-white focus:outline-none focus:border-purple-500"
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-white focus:outline-none focus:border-purple-500 font-semibold"
                   >
                     <option value="photo">Foto</option>
                     <option value="video">Video</option>
@@ -566,7 +851,7 @@ export const MediaManager: React.FC<MediaManagerProps> = ({ onGalleryUpdated }) 
                     onChange={(e) =>
                       setEditingItem({ ...editingItem, category: e.target.value as any })
                     }
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-white focus:outline-none focus:border-purple-500"
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-white focus:outline-none focus:border-purple-500 font-semibold"
                   >
                     {eventCategories.map((cat) => (
                       <option key={cat} value={cat}>
@@ -581,7 +866,7 @@ export const MediaManager: React.FC<MediaManagerProps> = ({ onGalleryUpdated }) 
                   <select
                     value={editingItem.branchId || 'all'}
                     onChange={(e) => setEditingItem({ ...editingItem, branchId: e.target.value })}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-white focus:outline-none focus:border-purple-500"
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-white focus:outline-none focus:border-purple-500 font-semibold"
                   >
                     <option value="all">Todas las Sucursales</option>
                     {branches.map((b) => (
@@ -640,7 +925,7 @@ export const MediaManager: React.FC<MediaManagerProps> = ({ onGalleryUpdated }) 
                     value={newTagText}
                     onChange={(e) => setNewTagText(e.target.value)}
                     className="flex-1 bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-white text-xs focus:outline-none focus:border-purple-500"
-                    placeholder="Ej. LineArray (sin #)"
+                    placeholder="Ej. LineArray, IluminacionRobotica (sin #)"
                     onKeyDown={(e) => {
                       if (e.key === 'Enter') {
                         e.preventDefault();
@@ -651,7 +936,7 @@ export const MediaManager: React.FC<MediaManagerProps> = ({ onGalleryUpdated }) 
                   <button
                     type="button"
                     onClick={handleAddTag}
-                    className="px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white font-bold rounded-xl"
+                    className="px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white font-bold rounded-xl cursor-pointer"
                   >
                     Agregar Tag
                   </button>
@@ -667,7 +952,7 @@ export const MediaManager: React.FC<MediaManagerProps> = ({ onGalleryUpdated }) 
                       <button
                         type="button"
                         onClick={() => handleRemoveTag(idx)}
-                        className="text-rose-400 hover:text-rose-300"
+                        className="text-rose-400 hover:text-rose-300 cursor-pointer"
                       >
                         <X className="w-3.5 h-3.5" />
                       </button>
@@ -683,7 +968,7 @@ export const MediaManager: React.FC<MediaManagerProps> = ({ onGalleryUpdated }) 
                     type="checkbox"
                     checked={!!editingItem.featured}
                     onChange={(e) => setEditingItem({ ...editingItem, featured: e.target.checked })}
-                    className="w-4 h-4 accent-amber-500 rounded"
+                    className="w-4 h-4 accent-amber-500 rounded cursor-pointer"
                   />
                   <span>Destacar en la primera grilla de la galería</span>
                 </label>

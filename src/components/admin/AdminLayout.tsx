@@ -44,7 +44,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
     { id: 'agenda', label: 'Agenda & Calendario', icon: CalendarDays },
     { id: 'events', label: 'Gestión de Eventos', icon: Calendar },
     { id: 'procedures', label: 'Protocolos de Eventos', icon: Clock },
-    { id: 'site-content', label: 'Textos Landing Page', icon: Edit3 },
+    { id: 'site-content', label: 'Textos & Efectos Landing', icon: Edit3 },
     { id: 'crm', label: 'CRM & Presupuestos', icon: Users },
     { id: 'messages', label: 'Mensajes & Consultas', icon: MessageSquare },
     { id: 'services', label: 'Servicios & Shows', icon: Sparkles },

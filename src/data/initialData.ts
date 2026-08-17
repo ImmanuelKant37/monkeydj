@@ -273,7 +273,157 @@ export const INITIAL_TESTIMONIALS: Testimonial[] = [
   }
 ];
 
-export const INITIAL_GALLERY: GalleryItem[] = [];
+export const INITIAL_GALLERY: GalleryItem[] = [
+  // 2026 - Agosto (Mes Actual)
+  {
+    id: 'gal-2026-08-01',
+    title: 'Boda Mágica & Pista LED de Cristal',
+    eventTitle: 'Casamiento Sofía & Agustín',
+    mediaType: 'photo',
+    mediaUrl: 'https://images.unsplash.com/photo-1519741497674-611481863552?auto=format&fit=crop&w=1200&q=80',
+    thumbnailUrl: 'https://images.unsplash.com/photo-1519741497674-611481863552?auto=format&fit=crop&w=600&q=80',
+    category: 'Casamiento',
+    date: '2026-08-15',
+    location: 'Salón Los Robles, Concordia',
+    branchId: 'b-concordia',
+    tags: ['BodaMagica', 'PistaLED', 'Concordia', 'ValsHumoBajo'],
+    featured: true
+  },
+  {
+    id: 'gal-2026-08-02',
+    title: 'Show Megatrón Robot LED & Jet de CO2',
+    eventTitle: 'Fiesta de 15 Delfina',
+    mediaType: 'reel',
+    mediaUrl: 'https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?auto=format&fit=crop&w=1200&q=80',
+    thumbnailUrl: 'https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?auto=format&fit=crop&w=600&q=80',
+    category: 'Cumpleaños de XV',
+    date: '2026-08-08',
+    location: 'Salón Gran Paraná, Posadas',
+    branchId: 'b-posadas',
+    tags: ['RobotLED', 'CO2Jet', 'Posadas', 'Fiesta15'],
+    featured: true
+  },
+  {
+    id: 'gal-2026-08-03',
+    title: 'Gala Anual Empresarial & Audio Distribución',
+    eventTitle: 'Convención Regional AgroTech',
+    mediaType: 'photo',
+    mediaUrl: 'https://images.unsplash.com/photo-1511795409834-ef04bbd61622?auto=format&fit=crop&w=1200&q=80',
+    thumbnailUrl: 'https://images.unsplash.com/photo-1511795409834-ef04bbd61622?auto=format&fit=crop&w=600&q=80',
+    category: 'Evento Empresarial',
+    date: '2026-08-02',
+    location: 'Centro de Convenciones, Posadas',
+    branchId: 'b-posadas',
+    tags: ['Empresarial', 'Conferencia', 'SonidoPuro', 'Posadas'],
+    featured: false
+  },
+
+  // 2026 - Julio
+  {
+    id: 'gal-2026-07-01',
+    title: 'Noche Neón & Fiesta Flúor de Egresados',
+    eventTitle: 'Egresados Colegio San Martín',
+    mediaType: 'photo',
+    mediaUrl: 'https://images.unsplash.com/photo-1492684223066-81342ee5ff30?auto=format&fit=crop&w=1200&q=80',
+    thumbnailUrl: 'https://images.unsplash.com/photo-1492684223066-81342ee5ff30?auto=format&fit=crop&w=600&q=80',
+    category: 'Fiesta de Egreso',
+    date: '2026-07-25',
+    location: 'Salón Costanera Norte, Concordia',
+    branchId: 'b-concordia',
+    tags: ['Egresados2026', 'NeonParty', 'ChispaFria', 'Concordia'],
+    featured: true
+  },
+  {
+    id: 'gal-2026-07-02',
+    title: 'Set DJ Live & Cabina Espejada Holográfica',
+    eventTitle: 'Cumpleaños 40 VIP Federico',
+    mediaType: 'video',
+    mediaUrl: 'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?auto=format&fit=crop&w=1200&q=80',
+    thumbnailUrl: 'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?auto=format&fit=crop&w=600&q=80',
+    category: 'Cumpleaños Adultos',
+    date: '2026-07-11',
+    location: 'Club Náutico Concordia',
+    branchId: 'b-concordia',
+    tags: ['DJLive', 'CabinaVIP', 'Concordia', 'Remixes'],
+    featured: false
+  },
+
+  // 2026 - Junio
+  {
+    id: 'gal-2026-06-01',
+    title: 'Vals en las Nubes con Humo Bajo & Chispas',
+    eventTitle: 'Boda Camila & Facundo',
+    mediaType: 'photo',
+    mediaUrl: 'https://images.unsplash.com/photo-1464366400600-7168b8af9bc3?auto=format&fit=crop&w=1200&q=80',
+    thumbnailUrl: 'https://images.unsplash.com/photo-1464366400600-7168b8af9bc3?auto=format&fit=crop&w=600&q=80',
+    category: 'Casamiento',
+    date: '2026-06-20',
+    location: 'Estancia La Sofía, Concordia',
+    branchId: 'b-concordia',
+    tags: ['BodaDeEnsueño', 'HumoBajo', 'ChispasFrias', 'Estancia'],
+    featured: true
+  },
+  {
+    id: 'gal-2026-06-02',
+    title: 'Despliegue Láser 3D & Cabezales Móviles Beam',
+    eventTitle: 'Fiesta Retro 80s 90s',
+    mediaType: 'reel',
+    mediaUrl: 'https://images.unsplash.com/photo-1533174072545-7a4b6ad7a6c3?auto=format&fit=crop&w=1200&q=80',
+    thumbnailUrl: 'https://images.unsplash.com/photo-1533174072545-7a4b6ad7a6c3?auto=format&fit=crop&w=600&q=80',
+    category: 'Evento Privado',
+    date: '2026-06-06',
+    location: 'Salón Río Paraná, Posadas',
+    branchId: 'b-posadas',
+    tags: ['Laser3D', 'FiestaRetro', 'Posadas', 'BeamLights'],
+    featured: false
+  },
+
+  // 2025 - Diciembre
+  {
+    id: 'gal-2025-12-01',
+    title: 'Fiesta de Fin de Año Corporativa & Pantalla LED P3',
+    eventTitle: 'Gala Cierre de Año Banco Litoral',
+    mediaType: 'photo',
+    mediaUrl: 'https://images.unsplash.com/photo-1508700115892-45ecd05ae2ad?auto=format&fit=crop&w=1200&q=80',
+    thumbnailUrl: 'https://images.unsplash.com/photo-1508700115892-45ecd05ae2ad?auto=format&fit=crop&w=600&q=80',
+    category: 'Evento Empresarial',
+    date: '2025-12-19',
+    location: 'Centro de Convenciones, Concordia',
+    branchId: 'b-concordia',
+    tags: ['FinDeAño', 'PantallaLED', 'Corporativo', 'Concordia'],
+    featured: true
+  },
+  {
+    id: 'gal-2025-12-02',
+    title: 'Mega Fiesta de 15 & Carnaval Carioca Flúor',
+    eventTitle: 'Los 15 de Martina',
+    mediaType: 'photo',
+    mediaUrl: 'https://images.unsplash.com/photo-1501386761578-eac5c94b800a?auto=format&fit=crop&w=1200&q=80',
+    thumbnailUrl: 'https://images.unsplash.com/photo-1501386761578-eac5c94b800a?auto=format&fit=crop&w=600&q=80',
+    category: 'Cumpleaños de XV',
+    date: '2025-12-05',
+    location: 'Salón Los Pinos, Posadas',
+    branchId: 'b-posadas',
+    tags: ['CariocaFluor', 'Fiesta15', 'Posadas', 'SonidoRCF'],
+    featured: false
+  },
+
+  // 2025 - Noviembre
+  {
+    id: 'gal-2025-11-01',
+    title: 'Festival Nocturno al Aire Libre & Sonido Line Array',
+    eventTitle: 'Festival Primavera Electrónica',
+    mediaType: 'photo',
+    mediaUrl: 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?auto=format&fit=crop&w=1200&q=80',
+    thumbnailUrl: 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?auto=format&fit=crop&w=600&q=80',
+    category: 'Festival / Concierto',
+    date: '2025-11-14',
+    location: 'Costanera Posadas, Misiones',
+    branchId: 'b-posadas',
+    tags: ['LineArray', 'FestivalNight', 'Posadas', 'OpenAir'],
+    featured: true
+  }
+];
 
 export const INITIAL_CUSTOMERS: Customer[] = [
   {
@@ -722,6 +872,14 @@ export const INITIAL_SITE_CONTENT: SiteContent = {
 
   quoteBannerTag: 'Cotización Online Instantánea',
   quoteBannerTitle: '¿Querés saber cuánto cuesta tu evento?',
-  quoteBannerSubtitle: 'Calculá en menos de 1 minuto con precios oficiales, promociones por combo y disponibilidad para Concordia y Posadas.'
+  quoteBannerSubtitle: 'Calculá en menos de 1 minuto con precios oficiales, promociones por combo y disponibilidad para Concordia y Posadas.',
+
+  // Visual preview effects
+  previewEffect: 'ken-burns',
+  previewSpeed: 'slow',
+  previewHoverZoom: true,
+  previewEnableOnHero: true,
+  previewEnableOnGallery: true,
+  previewEnableOnServices: true
 };
 

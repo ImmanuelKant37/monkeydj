@@ -19,11 +19,12 @@ import {
   RefreshCw,
   Clipboard,
   Zap,
-  Loader2
+  Loader2,
+  Calendar,
+  MapPin
 } from 'lucide-react';
 import { GalleryItem, EventType, Branch } from '../../types';
 import { optimizeImageFile, optimizeVideoFile, cleanMediaUrl } from '../../utils/imageOptimizer';
-import { SupabaseService } from '../../services/supabase';
 
 interface StagedMediaItem {
   id: string;
@@ -35,6 +36,9 @@ interface StagedMediaItem {
   thumbnailUrl: string;
   category: EventType;
   branchId: string;
+  date: string;
+  location: string;
+  venue?: string;
   tags: string[];
   featured: boolean;
   status: 'ready' | 'processing' | 'done' | 'error';
@@ -54,6 +58,7 @@ export const BulkMediaImporter: React.FC<BulkMediaImporterProps> = ({
   onImportComplete,
   onClose
 }) => {
+  const today = new Date().toISOString().split('T')[0];
   const [activeTab, setActiveTab] = useState<'dragdrop' | 'urls'>('dragdrop');
   const [isDragging, setIsDragging] = useState(false);
   const [stagedItems, setStagedItems] = useState<StagedMediaItem[]>([]);
@@ -66,6 +71,9 @@ export const BulkMediaImporter: React.FC<BulkMediaImporterProps> = ({
   // Batch default controls
   const [defaultCategory, setDefaultCategory] = useState<EventType>('Casamiento');
   const [defaultBranchId, setDefaultBranchId] = useState<string>('all');
+  const [defaultDate, setDefaultDate] = useState<string>(today);
+  const [defaultLocation, setDefaultLocation] = useState<string>('Concordia, Entre Ríos');
+  const [defaultVenue, setDefaultVenue] = useState<string>('');
   const [defaultEventTitle, setDefaultEventTitle] = useState<string>('');
   const [defaultTagsText, setDefaultTagsText] = useState<string>('ProduccionLive, MonkeyDJ');
   const [defaultFeatured, setDefaultFeatured] = useState<boolean>(true);
@@ -108,15 +116,16 @@ export const BulkMediaImporter: React.FC<BulkMediaImporterProps> = ({
       .filter((t) => t.length > 0);
   };
 
-  // Format bytes for human readable display
+  // Helper format bytes
   const formatBytes = (bytes?: number) => {
-    if (!bytes || bytes <= 0) return '';
-    if (bytes < 1024) return `${bytes} B`;
-    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
-    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+    if (!bytes || bytes === 0) return '0 B';
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
   };
 
-  // Process selected or dropped files with client-side image compression
+  // Process files (Image / Video compression)
   const processFiles = useCallback(
     async (files: FileList | File[]) => {
       const fileArray = Array.from(files);
@@ -124,7 +133,6 @@ export const BulkMediaImporter: React.FC<BulkMediaImporterProps> = ({
 
       setIsReadingFiles(true);
       setReadingProgress({ current: 0, total: fileArray.length });
-      setFeedbackMsg(null);
 
       const newStagedList: StagedMediaItem[] = [];
       let successCount = 0;
@@ -135,66 +143,62 @@ export const BulkMediaImporter: React.FC<BulkMediaImporterProps> = ({
         setReadingProgress({ current: i + 1, total: fileArray.length });
 
         try {
-          const isImage = file.type.startsWith('image/') || /\.(jpg|jpeg|png|webp|gif|bmp|heic)$/i.test(file.name);
-          const isVideo = file.type.startsWith('video/') || /\.(mp4|mov|webm|m4v|avi)$/i.test(file.name);
+          const isImage =
+            file.type.startsWith('image/') ||
+            /\.(jpg|jpeg|png|webp|gif|bmp|heic)$/i.test(file.name);
+          const isVideo =
+            file.type.startsWith('video/') || /\.(mp4|mov|webm|avi|mkv|m4v)$/i.test(file.name);
 
           if (!isImage && !isVideo) {
             errorCount++;
             continue;
           }
 
-          let optimizedMediaUrl = '';
-          let optimizedThumbnail = '';
-          let detectedType: 'photo' | 'video' | 'reel' = 'photo';
+          let finalMediaUrl = '';
+          let finalThumbUrl = '';
+          let detectedMediaType: 'photo' | 'video' | 'reel' = 'photo';
           let origSize = file.size;
           let compSize = file.size;
 
-          // Attempt direct Supabase Storage upload for worldwide CDN URL
-          const cloudUrl = await SupabaseService.uploadMediaFile(file, file.name);
-
           if (isImage) {
-            detectedType = 'photo';
-            if (cloudUrl) {
-              optimizedMediaUrl = cloudUrl;
-              optimizedThumbnail = cloudUrl;
-            } else {
-              const opt = await optimizeImageFile(file, { maxWidth: 1600, maxHeight: 1600, quality: 0.82 });
-              optimizedMediaUrl = opt.mediaUrl;
-              optimizedThumbnail = opt.thumbnailUrl;
-              origSize = opt.originalSize;
-              compSize = opt.compressedSize;
-            }
+            const opt = await optimizeImageFile(file, {
+              maxWidth: 1600,
+              maxHeight: 1600,
+              quality: 0.82
+            });
+            finalMediaUrl = opt.mediaUrl;
+            finalThumbUrl = opt.thumbnailUrl || opt.mediaUrl;
+            detectedMediaType = 'photo';
+            origSize = opt.originalSize;
+            compSize = opt.compressedSize;
           } else {
-            if (cloudUrl) {
-              optimizedMediaUrl = cloudUrl;
-              optimizedThumbnail = cloudUrl;
-              detectedType = file.name.toLowerCase().includes('reel') || file.name.toLowerCase().includes('short') ? 'reel' : 'video';
-            } else {
-              const opt = await optimizeVideoFile(file);
-              optimizedMediaUrl = opt.mediaUrl;
-              optimizedThumbnail = opt.thumbnailUrl;
-              detectedType = opt.mediaType;
-              origSize = opt.originalSize;
-              compSize = opt.compressedSize;
-            }
+            const opt = await optimizeVideoFile(file);
+            finalMediaUrl = opt.mediaUrl;
+            finalThumbUrl = opt.thumbnailUrl;
+            detectedMediaType = opt.mediaType;
+            origSize = opt.originalSize;
+            compSize = opt.compressedSize;
           }
 
-          if (defaultMediaType !== 'auto') {
-            detectedType = defaultMediaType;
-          }
+          // Override media type if forced by user
+          const finalType =
+            defaultMediaType !== 'auto' ? defaultMediaType : detectedMediaType;
 
-          const autoTitle = formatTitleFromFilename(file.name);
+          const title = formatTitleFromFilename(file.name);
 
           newStagedList.push({
-            id: `staged-${Date.now()}-${i}-${Math.random().toString(36).substring(2, 7)}`,
+            id: `staged-${Date.now()}-${i}-${Math.random().toString(36).substring(2, 6)}`,
             file,
-            title: autoTitle || 'Nueva Producción Audiovisual',
+            title,
             eventTitle: defaultEventTitle || 'Producción Monkey DJ',
-            mediaType: detectedType,
-            mediaUrl: optimizedMediaUrl,
-            thumbnailUrl: optimizedThumbnail || (detectedType === 'photo' ? optimizedMediaUrl : ''),
+            mediaType: finalType,
+            mediaUrl: finalMediaUrl,
+            thumbnailUrl: finalThumbUrl,
             category: defaultCategory,
             branchId: defaultBranchId,
+            date: defaultDate,
+            location: defaultLocation,
+            venue: defaultVenue,
             tags: parseTags(defaultTagsText),
             featured: defaultFeatured,
             status: 'ready',
@@ -220,11 +224,11 @@ export const BulkMediaImporter: React.FC<BulkMediaImporterProps> = ({
       } else if (errorCount > 0) {
         setFeedbackMsg({
           type: 'error',
-          text: 'No se pudieron procesar los archivos seleccionados. Verifica que sean imágenes (JPG, PNG, WEBP) o videos (MP4, MOV).'
+          text: 'No se pudieron procesar los archivos seleccionados. Verifica que sean imágenes o videos.'
         });
       }
     },
-    [defaultCategory, defaultBranchId, defaultEventTitle, defaultTagsText, defaultFeatured, defaultMediaType]
+    [defaultCategory, defaultBranchId, defaultDate, defaultLocation, defaultVenue, defaultEventTitle, defaultTagsText, defaultFeatured, defaultMediaType]
   );
 
   // Clipboard paste listener (Ctrl+V support)
@@ -288,21 +292,20 @@ export const BulkMediaImporter: React.FC<BulkMediaImporterProps> = ({
 
     rawLines.forEach((line, idx) => {
       const clean = cleanMediaUrl(line);
-      if (clean.isValid && clean.url) {
-        let type = clean.mediaType;
-        if (defaultMediaType !== 'auto') {
-          type = defaultMediaType;
-        }
-
+      if (clean && clean.url) {
+        const type = defaultMediaType !== 'auto' ? defaultMediaType : clean.type;
         validItems.push({
-          id: `staged-url-${Date.now()}-${idx}-${Math.random().toString(36).substring(2, 6)}`,
-          title: `${defaultEventTitle || 'Producción Audiovisual'} #${idx + 1}`,
+          id: `staged-url-${Date.now()}-${idx}`,
+          title: `Producción Multimedia ${idx + 1}`,
           eventTitle: defaultEventTitle || 'Evento Destacado Monkey DJ',
           mediaType: type,
           mediaUrl: clean.url,
           thumbnailUrl: type === 'photo' ? clean.url : '',
           category: defaultCategory,
           branchId: defaultBranchId,
+          date: defaultDate,
+          location: defaultLocation,
+          venue: defaultVenue,
           tags: parseTags(defaultTagsText),
           featured: defaultFeatured,
           status: 'ready'
@@ -332,6 +335,9 @@ export const BulkMediaImporter: React.FC<BulkMediaImporterProps> = ({
         ...item,
         category: defaultCategory,
         branchId: defaultBranchId,
+        date: defaultDate,
+        location: defaultLocation,
+        venue: defaultVenue,
         eventTitle: defaultEventTitle || item.eventTitle,
         tags: parseTags(defaultTagsText),
         featured: defaultFeatured,
@@ -340,7 +346,7 @@ export const BulkMediaImporter: React.FC<BulkMediaImporterProps> = ({
     );
     setFeedbackMsg({
       type: 'info',
-      text: `Valores predeterminados aplicados a los ${stagedItems.length} elementos en cola.`
+      text: `Valores de fecha, lugar y categoría aplicados a los ${stagedItems.length} elementos en cola.`
     });
   };
 
@@ -404,7 +410,7 @@ export const BulkMediaImporter: React.FC<BulkMediaImporterProps> = ({
 
     for (let i = 0; i < total; i++) {
       const item = stagedItems[i];
-      await new Promise((res) => setTimeout(res, 40));
+      await new Promise((res) => setTimeout(res, 30));
 
       finalGalleryItems.push({
         id: `gal-${Date.now()}-${i}-${Math.random().toString(36).substring(2, 7)}`,
@@ -415,6 +421,9 @@ export const BulkMediaImporter: React.FC<BulkMediaImporterProps> = ({
         thumbnailUrl: item.thumbnailUrl || (item.mediaType === 'photo' ? item.mediaUrl : ''),
         category: item.category,
         branchId: item.branchId,
+        date: item.date || today,
+        location: item.location || 'Concordia, Entre Ríos',
+        venue: item.venue,
         tags: item.tags,
         featured: item.featured
       });
@@ -448,18 +457,17 @@ export const BulkMediaImporter: React.FC<BulkMediaImporterProps> = ({
                   IMPORTADOR MASIVO DE FOTOS Y VIDEOS
                 </h2>
                 <span className="bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase flex items-center gap-1">
-                  <Zap className="w-3 h-3 text-emerald-400" />
-                  Auto-Compresión
+                  <Zap className="w-3 h-3 text-emerald-400" /> Clasificación Automática
                 </span>
               </div>
               <p className="text-xs text-slate-400">
-                Arrastra decenas de fotos o pega URLs. Las imágenes se optimizan y comprimen automáticamente para almacenamiento ultra liviano.
+                Sube docenas de fotos y videos con compresión automática y asígnales fecha, lugar y sucursal.
               </p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="p-2 rounded-full bg-slate-800 text-slate-400 hover:text-white transition-colors cursor-pointer"
+            className="p-2.5 rounded-full bg-slate-800 text-slate-400 hover:text-white cursor-pointer transition-colors"
           >
             <X className="w-5 h-5" />
           </button>
@@ -468,25 +476,25 @@ export const BulkMediaImporter: React.FC<BulkMediaImporterProps> = ({
         {/* Feedback Message */}
         {feedbackMsg && (
           <div
-            className={`p-3 rounded-2xl text-xs font-semibold flex items-center justify-between gap-2 shrink-0 mb-3 ${
+            className={`p-3 rounded-2xl text-xs font-semibold flex items-center justify-between mb-3 shrink-0 ${
               feedbackMsg.type === 'success'
-                ? 'bg-emerald-950/80 border border-emerald-500/40 text-emerald-300'
+                ? 'bg-emerald-950/60 border border-emerald-500/40 text-emerald-300'
                 : feedbackMsg.type === 'error'
-                ? 'bg-rose-950/80 border border-rose-500/40 text-rose-300'
-                : 'bg-blue-950/80 border border-blue-500/40 text-blue-300'
+                ? 'bg-rose-950/60 border border-rose-500/40 text-rose-300'
+                : 'bg-blue-950/60 border border-blue-500/40 text-blue-300'
             }`}
           >
             <div className="flex items-center gap-2">
               {feedbackMsg.type === 'success' ? (
-                <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-400" />
               ) : (
-                <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
+                <AlertCircle className="w-4 h-4 shrink-0" />
               )}
               <span>{feedbackMsg.text}</span>
             </div>
             <button
               onClick={() => setFeedbackMsg(null)}
-              className="text-slate-400 hover:text-white cursor-pointer"
+              className="text-slate-400 hover:text-white ml-2"
             >
               <X className="w-3.5 h-3.5" />
             </button>
@@ -495,8 +503,9 @@ export const BulkMediaImporter: React.FC<BulkMediaImporterProps> = ({
 
         {/* Scrollable Container */}
         <div className="flex-1 overflow-y-auto space-y-6 pr-1 text-xs">
-          {/* 1. Ingestion Source Tabs */}
-          <div className="flex items-center gap-2 bg-slate-950 p-1.5 rounded-2xl border border-slate-800 w-fit">
+          
+          {/* Navigation Tabs */}
+          <div className="flex gap-2 p-1.5 bg-slate-950 rounded-2xl border border-slate-800 w-fit">
             <button
               onClick={() => setActiveTab('dragdrop')}
               className={`px-4 py-2 rounded-xl font-bold flex items-center gap-2 transition-all cursor-pointer ${
@@ -566,7 +575,7 @@ export const BulkMediaImporter: React.FC<BulkMediaImporterProps> = ({
               ) : (
                 <>
                   <div className="w-16 h-16 rounded-full bg-gradient-to-tr from-purple-600/30 to-pink-600/30 border border-purple-500/40 text-purple-300 flex items-center justify-center shadow-lg">
-                    <UploadCloud className="w-8 h-8 animate-bounce-slow" />
+                    <UploadCloud className="w-8 h-8" />
                   </div>
 
                   <div className="space-y-1">
@@ -621,13 +630,13 @@ export const BulkMediaImporter: React.FC<BulkMediaImporterProps> = ({
             </div>
           )}
 
-          {/* 2. Global Batch Defaults Config */}
-          <div className="bg-slate-950/80 p-4 sm:p-5 rounded-3xl border border-slate-800 space-y-4">
+          {/* 2. Global Batch Defaults Config with Classification */}
+          <div className="bg-slate-950/80 p-4 sm:p-5 rounded-3xl border border-purple-500/30 space-y-4">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
               <div className="flex items-center gap-2">
                 <Sparkles className="w-4 h-4 text-amber-400" />
                 <h3 className="text-xs font-black uppercase tracking-wider text-white">
-                  Valores Predeterminados para el Lote
+                  Valores Predeterminados & Clasificación para el Lote
                 </h3>
               </div>
               {stagedItems.length > 0 && (
@@ -637,7 +646,7 @@ export const BulkMediaImporter: React.FC<BulkMediaImporterProps> = ({
                   className="text-[11px] font-bold text-purple-400 hover:text-purple-300 bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/30 px-3 py-1.5 rounded-xl transition-colors cursor-pointer flex items-center gap-1.5 w-fit"
                 >
                   <RefreshCw className="w-3.5 h-3.5" />
-                  <span>Aplicar estos valores a los {stagedItems.length} elementos de la cola</span>
+                  <span>Aplicar estos valores a los {stagedItems.length} elementos en cola</span>
                 </button>
               )}
             </div>
@@ -680,19 +689,58 @@ export const BulkMediaImporter: React.FC<BulkMediaImporterProps> = ({
                 </select>
               </div>
 
-              {/* Event / Venue Name */}
+              {/* Date Input */}
               <div>
-                <label className="block text-slate-400 font-semibold mb-1">Nombre Evento / Salón</label>
+                <label className="block text-purple-300 font-semibold mb-1 flex items-center gap-1">
+                  <Calendar className="w-3.5 h-3.5 text-purple-400" /> Fecha del Lote
+                </label>
+                <input
+                  type="date"
+                  value={defaultDate}
+                  onChange={(e) => setDefaultDate(e.target.value)}
+                  className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-white font-bold focus:outline-none focus:border-purple-500"
+                />
+              </div>
+
+              {/* Location Input */}
+              <div>
+                <label className="block text-pink-300 font-semibold mb-1 flex items-center gap-1">
+                  <MapPin className="w-3.5 h-3.5 text-pink-400" /> Lugar / Ciudad del Lote
+                </label>
+                <input
+                  type="text"
+                  value={defaultLocation}
+                  onChange={(e) => setDefaultLocation(e.target.value)}
+                  placeholder="Ej. Concordia, Entre Ríos"
+                  className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-white font-medium focus:outline-none focus:border-purple-500"
+                />
+              </div>
+            </div>
+
+            {/* Row 2: Event Name, Venue, Media Type */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div>
+                <label className="block text-slate-400 font-semibold mb-1">Nombre Evento / Pareja</label>
                 <input
                   type="text"
                   value={defaultEventTitle}
                   onChange={(e) => setDefaultEventTitle(e.target.value)}
-                  placeholder="Ej. Boda en Estancia La Sofía"
+                  placeholder="Ej. Boda Valeria & Gonzalo"
                   className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-purple-500"
                 />
               </div>
 
-              {/* Media Type */}
+              <div>
+                <label className="block text-slate-400 font-semibold mb-1">Salón / Espacio (Venue)</label>
+                <input
+                  type="text"
+                  value={defaultVenue}
+                  onChange={(e) => setDefaultVenue(e.target.value)}
+                  placeholder="Ej. Salón La Sofía"
+                  className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-purple-500"
+                />
+              </div>
+
               <div>
                 <label className="block text-slate-400 font-semibold mb-1">Tipo de Medio</label>
                 <select
@@ -709,7 +757,7 @@ export const BulkMediaImporter: React.FC<BulkMediaImporterProps> = ({
             </div>
 
             {/* Tags & Featured row */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-center">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-center pt-1 border-t border-slate-800/80">
               <div className="sm:col-span-2">
                 <label className="block text-slate-400 font-semibold mb-1">
                   Etiquetas globales (#Tags separados por coma)
@@ -723,13 +771,13 @@ export const BulkMediaImporter: React.FC<BulkMediaImporterProps> = ({
                 />
               </div>
 
-              <div className="pt-5">
+              <div className="pt-4">
                 <label className="flex items-center gap-2 cursor-pointer text-slate-300 font-bold">
                   <input
                     type="checkbox"
                     checked={defaultFeatured}
                     onChange={(e) => setDefaultFeatured(e.target.checked)}
-                    className="w-4 h-4 accent-amber-500 rounded"
+                    className="w-4 h-4 accent-amber-500 rounded cursor-pointer"
                   />
                   <span>Marcar lote como Destacado</span>
                 </label>
@@ -803,7 +851,7 @@ export const BulkMediaImporter: React.FC<BulkMediaImporterProps> = ({
                       </div>
                     </div>
 
-                    {/* Editable Title & Compression stats */}
+                    {/* Editable Title & Classification */}
                     <div className="flex-1 w-full sm:w-auto space-y-1">
                       <input
                         type="text"
@@ -812,20 +860,23 @@ export const BulkMediaImporter: React.FC<BulkMediaImporterProps> = ({
                         className="w-full bg-slate-900 border border-slate-800 rounded-xl px-2.5 py-1.5 text-white font-bold text-xs focus:outline-none focus:border-purple-500"
                         placeholder="Título del elemento..."
                       />
-                      {item.originalSize && item.compressedSize && item.originalSize > item.compressedSize && (
-                        <div className="flex items-center gap-2 text-[10px] text-emerald-400">
-                          <span>
-                            Optimizado: {formatBytes(item.originalSize)} → {formatBytes(item.compressedSize)}
-                          </span>
-                          <span className="bg-emerald-500/20 px-1.5 py-0.2 rounded font-bold">
-                            -
-                            {Math.round(
-                              ((item.originalSize - item.compressedSize) / item.originalSize) * 100
-                            )}
-                            %
-                          </span>
-                        </div>
-                      )}
+                      <div className="flex flex-wrap items-center gap-2 text-[10px] text-slate-400">
+                        <span className="text-purple-300 font-semibold flex items-center gap-1">
+                          <Calendar className="w-3 h-3" /> {item.date || 'Sin fecha'}
+                        </span>
+                        <span>•</span>
+                        <span className="text-pink-300 font-medium flex items-center gap-1">
+                          <MapPin className="w-3 h-3" /> {item.location || 'Sin lugar'}
+                        </span>
+                        {item.originalSize && item.compressedSize && item.originalSize > item.compressedSize && (
+                          <>
+                            <span>•</span>
+                            <span className="text-emerald-400">
+                              -{Math.round(((item.originalSize - item.compressedSize) / item.originalSize) * 100)}%
+                            </span>
+                          </>
+                        )}
+                      </div>
                     </div>
 
                     {/* Quick Media Type & Category Dropdowns */}

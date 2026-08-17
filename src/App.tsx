@@ -270,11 +270,13 @@ export function App() {
           />
 
           <main className="flex-1">
-            {/* Hero Section with Video Background */}
+            {/* Visual Cover / Portada Gallery */}
+            <GallerySection items={effectiveGallery} siteContent={siteContent} />
+
+            {/* Hero Headline, Actions & Stats */}
             <Hero
               branch={currentBranch}
               siteContent={siteContent}
-              gallery={effectiveGallery}
               onOpenQuote={() => setQuoteModalOpen(true)}
               onOpenServices={() => {
                 const el = document.getElementById('servicios');
@@ -311,9 +313,6 @@ export function App() {
                 </button>
               </div>
             </section>
-
-            {/* Multimedia Gallery */}
-            <GallerySection items={branchGallery} />
 
             {/* Real Testimonials */}
             <TestimonialsSection

@@ -306,6 +306,9 @@ export interface GalleryItem {
   eventTitle?: string;
   featured?: boolean;
   branchId?: string;
+  date?: string; // Formato YYYY-MM-DD (ej: 2026-08-15)
+  location?: string; // Salón / Ciudad / Lugar del evento (ej: "Salón Los Robles, Concordia")
+  venue?: string;
 }
 
 export interface Coupon {
@@ -335,6 +338,19 @@ export interface AuditLog {
   details: string;
 }
 
+export type PreviewEffectType = 
+  | 'ken-burns'
+  | 'slow-zoom-in'
+  | 'slow-zoom-out'
+  | 'subtle-float'
+  | 'pan-left-right'
+  | 'cinematic-pulse'
+  | 'gentle-tilt'
+  | 'hover-zoom'
+  | 'none';
+
+export type PreviewSpeedType = 'ultra-slow' | 'slow' | 'medium' | 'fast';
+
 export interface SiteContent {
   heroTag: string;
   heroTitleLine1: string;
@@ -354,4 +370,12 @@ export interface SiteContent {
   quoteBannerTag: string;
   quoteBannerTitle: string;
   quoteBannerSubtitle: string;
+
+  // Visual preview effects settings
+  previewEffect?: PreviewEffectType;
+  previewSpeed?: PreviewSpeedType;
+  previewHoverZoom?: boolean;
+  previewEnableOnHero?: boolean;
+  previewEnableOnGallery?: boolean;
+  previewEnableOnServices?: boolean;
 }
