@@ -9,15 +9,18 @@ import {
   Film,
   Search,
   Upload,
+  UploadCloud,
   CheckCircle2,
   X,
   Star,
   Save,
   Building2,
-  Tag
+  Tag,
+  Layers
 } from 'lucide-react';
 import { AppStorage } from '../../services/storage';
 import { GalleryItem, EventType } from '../../types';
+import { BulkMediaImporter } from './BulkMediaImporter';
 
 interface MediaManagerProps {
   onGalleryUpdated?: () => void;
@@ -31,6 +34,7 @@ export const MediaManager: React.FC<MediaManagerProps> = ({ onGalleryUpdated }) 
   const [searchQuery, setSearchQuery] = useState('');
   const [editingItem, setEditingItem] = useState<GalleryItem | null>(null);
   const [isCreating, setIsCreating] = useState(false);
+  const [isBulkImportOpen, setIsBulkImportOpen] = useState(false);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [newTagText, setNewTagText] = useState('');
   const [successToast, setSuccessToast] = useState('');
@@ -40,6 +44,7 @@ export const MediaManager: React.FC<MediaManagerProps> = ({ onGalleryUpdated }) 
       if (e.key === 'Escape') {
         setEditingItem(null);
         setIsCreating(false);
+        setIsBulkImportOpen(false);
         setDeleteConfirmId(null);
       }
     };
@@ -121,6 +126,12 @@ export const MediaManager: React.FC<MediaManagerProps> = ({ onGalleryUpdated }) 
     handleSaveAll(updated);
     setEditingItem(null);
     setIsCreating(false);
+  };
+
+  const handleBulkImportComplete = (newItems: GalleryItem[]) => {
+    const updated = [...newItems, ...gallery];
+    handleSaveAll(updated);
+    showToast(`¡${newItems.length} producciones importadas con éxito a la galería!`);
   };
 
   const handleDelete = (id: string) => {
@@ -217,13 +228,23 @@ export const MediaManager: React.FC<MediaManagerProps> = ({ onGalleryUpdated }) 
           </p>
         </div>
 
-        <button
-          onClick={handleCreateNew}
-          className="py-3 px-5 rounded-2xl bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white font-black text-xs shadow-lg shadow-purple-600/30 flex items-center justify-center gap-2 cursor-pointer transition-all transform hover:scale-105"
-        >
-          <Plus className="w-4 h-4" />
-          <span>AGREGAR ELEMENTO A LA GALERÍA</span>
-        </button>
+        <div className="flex flex-wrap items-center gap-3">
+          <button
+            onClick={() => setIsBulkImportOpen(true)}
+            className="py-3 px-5 rounded-2xl bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 text-white font-black text-xs shadow-lg shadow-indigo-600/30 flex items-center justify-center gap-2 cursor-pointer transition-all transform hover:scale-105 border border-indigo-400/30"
+          >
+            <UploadCloud className="w-4 h-4" />
+            <span>IMPORTADOR MASIVO (DRAG & DROP)</span>
+          </button>
+
+          <button
+            onClick={handleCreateNew}
+            className="py-3 px-5 rounded-2xl bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white font-black text-xs shadow-lg shadow-purple-600/30 flex items-center justify-center gap-2 cursor-pointer transition-all transform hover:scale-105"
+          >
+            <Plus className="w-4 h-4" />
+            <span>AGREGAR ELEMENTO INDIVIDUAL</span>
+          </button>
+        </div>
       </div>
 
       {/* Filters Bar */}
@@ -280,127 +301,157 @@ export const MediaManager: React.FC<MediaManagerProps> = ({ onGalleryUpdated }) 
       </div>
 
       {/* Gallery Cards Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-        {filteredItems.map((item) => (
-          <div
-            key={item.id}
-            className="bg-slate-900 border border-slate-800 hover:border-purple-500/50 rounded-3xl overflow-hidden shadow-xl flex flex-col justify-between transition-all group"
-          >
-            <div>
-              {/* Media Preview Container */}
-              <div className="relative h-48 overflow-hidden bg-slate-950">
-                <img
-                  src={item.thumbnailUrl || item.mediaUrl}
-                  alt={item.title}
-                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                />
-                <div className="absolute inset-0 bg-gradient-to-t from-slate-900 via-transparent to-transparent"></div>
-
-                {/* Media Type Badge */}
-                <div className="absolute top-3 left-3 flex flex-wrap gap-1.5">
-                  <span className="bg-black/70 backdrop-blur-md text-purple-300 font-bold text-[10px] px-2.5 py-0.5 rounded-lg uppercase border border-purple-500/30 flex items-center gap-1">
-                    {item.mediaType === 'reel' ? (
-                      <>
-                        <Film className="w-3 h-3 text-pink-400" /> REEL
-                      </>
-                    ) : item.mediaType === 'video' ? (
-                      <>
-                        <Play className="w-3 h-3 text-emerald-400" /> VIDEO
-                      </>
-                    ) : (
-                      <>
-                        <Camera className="w-3 h-3 text-amber-400" /> FOTO
-                      </>
-                    )}
-                  </span>
-
-                  {item.featured && (
-                    <span className="bg-amber-500 text-slate-950 font-black text-[10px] px-2 py-0.5 rounded-lg flex items-center gap-1">
-                      <Star className="w-3 h-3 fill-slate-950" /> DESTACADO
-                    </span>
-                  )}
-                </div>
-
-                {/* Branch Badge */}
-                <div className="absolute bottom-3 left-3">
-                  <span className="bg-purple-900/80 backdrop-blur-md text-purple-200 border border-purple-500/40 text-[10px] font-bold px-2 py-0.5 rounded-lg flex items-center gap-1">
-                    <Building2 className="w-3 h-3 text-purple-300" />
-                    <span>{getBranchLabel(item.branchId)}</span>
-                  </span>
-                </div>
-              </div>
-
-              {/* Info Body */}
-              <div className="p-5 space-y-2">
-                <div className="flex justify-between items-center">
-                  <span className="text-[10px] font-bold text-purple-400 uppercase tracking-wider">
-                    {item.category}
-                  </span>
-                  {item.eventTitle && (
-                    <span className="text-[10px] text-slate-400 italic">
-                      {item.eventTitle}
-                    </span>
-                  )}
-                </div>
-
-                <h3 className="font-extrabold text-white text-base leading-snug group-hover:text-purple-300 transition-colors">
-                  {item.title}
-                </h3>
-
-                {/* Tags */}
-                {item.tags && item.tags.length > 0 && (
-                  <div className="flex flex-wrap gap-1 pt-1">
-                    {item.tags.map((t, idx) => (
-                      <span
-                        key={idx}
-                        className="text-[9px] px-2 py-0.5 rounded bg-slate-950 text-slate-400 border border-slate-800"
-                      >
-                        #{t}
-                      </span>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Actions Bar */}
-            <div className="p-4 bg-slate-950/60 border-t border-slate-800/80 flex items-center justify-between gap-2">
-              <button
-                onClick={() => handleToggleFeatured(item.id)}
-                className={`p-2 rounded-xl border text-xs font-bold transition-all cursor-pointer ${
-                  item.featured
-                    ? 'bg-amber-500/20 text-amber-300 border-amber-500/40'
-                    : 'bg-slate-800 text-slate-400 border-slate-700 hover:text-white'
-                }`}
-                title="Destacar en portada"
-              >
-                <Star className={`w-4 h-4 ${item.featured ? 'fill-amber-300' : ''}`} />
-              </button>
-
-              <div className="flex items-center gap-1.5">
-                <button
-                  onClick={() => {
-                    setEditingItem(item);
-                    setIsCreating(false);
-                  }}
-                  className="px-3 py-2 rounded-xl bg-purple-600/20 hover:bg-purple-600/30 text-purple-300 border border-purple-500/30 font-bold text-xs flex items-center gap-1 transition-all cursor-pointer"
-                >
-                  <Edit2 className="w-3.5 h-3.5" />
-                  <span>Editar</span>
-                </button>
-
-                <button
-                  onClick={() => setDeleteConfirmId(item.id)}
-                  className="p-2 rounded-xl bg-rose-600/20 hover:bg-rose-600/30 text-rose-400 border border-rose-500/30 transition-all cursor-pointer"
-                  title="Eliminar elemento"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
-              </div>
-            </div>
+      {filteredItems.length === 0 ? (
+        <div className="bg-slate-900 border border-slate-800 rounded-3xl p-12 text-center max-w-xl mx-auto space-y-4">
+          <div className="w-16 h-16 rounded-full bg-purple-600/20 text-purple-400 border border-purple-500/30 flex items-center justify-center mx-auto">
+            <Camera className="w-8 h-8" />
           </div>
-        ))}
-      </div>
+          <div className="space-y-1">
+            <h3 className="text-lg font-black text-white">No se encontraron elementos en la galería</h3>
+            <p className="text-xs text-slate-400">
+              No hay fotos o videos que coincidan con la búsqueda o filtro seleccionado. Puedes subir nuevo material masivamente.
+            </p>
+          </div>
+          <div className="flex flex-wrap justify-center gap-3 pt-2">
+            <button
+              onClick={() => setIsBulkImportOpen(true)}
+              className="py-2.5 px-4 rounded-xl bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 text-white font-bold text-xs shadow-lg flex items-center gap-2 cursor-pointer transition-all"
+            >
+              <UploadCloud className="w-4 h-4" />
+              <span>Importador Masivo Drag & Drop</span>
+            </button>
+            <button
+              onClick={handleCreateNew}
+              className="py-2.5 px-4 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs flex items-center gap-2 cursor-pointer transition-all"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Agregar Uno Individual</span>
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+          {filteredItems.map((item) => (
+            <div
+              key={item.id}
+              className="bg-slate-900 border border-slate-800 hover:border-purple-500/50 rounded-3xl overflow-hidden shadow-xl flex flex-col justify-between transition-all group"
+            >
+              <div>
+                {/* Media Preview Container */}
+                <div className="relative h-48 overflow-hidden bg-slate-950">
+                  <img
+                    src={item.thumbnailUrl || item.mediaUrl}
+                    alt={item.title}
+                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-slate-900 via-transparent to-transparent"></div>
+
+                  {/* Media Type Badge */}
+                  <div className="absolute top-3 left-3 flex flex-wrap gap-1.5">
+                    <span className="bg-black/70 backdrop-blur-md text-purple-300 font-bold text-[10px] px-2.5 py-0.5 rounded-lg uppercase border border-purple-500/30 flex items-center gap-1">
+                      {item.mediaType === 'reel' ? (
+                        <>
+                          <Film className="w-3 h-3 text-pink-400" /> REEL
+                        </>
+                      ) : item.mediaType === 'video' ? (
+                        <>
+                          <Play className="w-3 h-3 text-emerald-400" /> VIDEO
+                        </>
+                      ) : (
+                        <>
+                          <Camera className="w-3 h-3 text-amber-400" /> FOTO
+                        </>
+                      )}
+                    </span>
+
+                    {item.featured && (
+                      <span className="bg-amber-500 text-slate-950 font-black text-[10px] px-2 py-0.5 rounded-lg flex items-center gap-1">
+                        <Star className="w-3 h-3 fill-slate-950" /> DESTACADO
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Branch Badge */}
+                  <div className="absolute bottom-3 left-3">
+                    <span className="bg-purple-900/80 backdrop-blur-md text-purple-200 border border-purple-500/40 text-[10px] font-bold px-2 py-0.5 rounded-lg flex items-center gap-1">
+                      <Building2 className="w-3 h-3 text-purple-300" />
+                      <span>{getBranchLabel(item.branchId)}</span>
+                    </span>
+                  </div>
+                </div>
+
+                {/* Info Body */}
+                <div className="p-5 space-y-2">
+                  <div className="flex justify-between items-center">
+                    <span className="text-[10px] font-bold text-purple-400 uppercase tracking-wider">
+                      {item.category}
+                    </span>
+                    {item.eventTitle && (
+                      <span className="text-[10px] text-slate-400 italic">
+                        {item.eventTitle}
+                      </span>
+                    )}
+                  </div>
+
+                  <h3 className="font-extrabold text-white text-base leading-snug group-hover:text-purple-300 transition-colors">
+                    {item.title}
+                  </h3>
+
+                  {/* Tags */}
+                  {item.tags && item.tags.length > 0 && (
+                    <div className="flex flex-wrap gap-1 pt-1">
+                      {item.tags.map((t, idx) => (
+                        <span
+                          key={idx}
+                          className="text-[9px] px-2 py-0.5 rounded bg-slate-950 text-slate-400 border border-slate-800"
+                        >
+                          #{t}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Actions Bar */}
+              <div className="p-4 bg-slate-950/60 border-t border-slate-800/80 flex items-center justify-between gap-2">
+                <button
+                  onClick={() => handleToggleFeatured(item.id)}
+                  className={`p-2 rounded-xl border text-xs font-bold transition-all cursor-pointer ${
+                    item.featured
+                      ? 'bg-amber-500/20 text-amber-300 border-amber-500/40'
+                      : 'bg-slate-800 text-slate-400 border-slate-700 hover:text-white'
+                  }`}
+                  title="Destacar en portada"
+                >
+                  <Star className={`w-4 h-4 ${item.featured ? 'fill-amber-300' : ''}`} />
+                </button>
+
+                <div className="flex items-center gap-1.5">
+                  <button
+                    onClick={() => {
+                      setEditingItem(item);
+                      setIsCreating(false);
+                    }}
+                    className="px-3 py-2 rounded-xl bg-purple-600/20 hover:bg-purple-600/30 text-purple-300 border border-purple-500/30 font-bold text-xs flex items-center gap-1 transition-all cursor-pointer"
+                  >
+                    <Edit2 className="w-3.5 h-3.5" />
+                    <span>Editar</span>
+                  </button>
+
+                  <button
+                    onClick={() => setDeleteConfirmId(item.id)}
+                    className="p-2 rounded-xl bg-rose-600/20 hover:bg-rose-600/30 text-rose-400 border border-rose-500/30 transition-all cursor-pointer"
+                    title="Eliminar elemento"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* Delete Confirmation Modal */}
       {deleteConfirmId && (
@@ -712,6 +763,15 @@ export const MediaManager: React.FC<MediaManagerProps> = ({ onGalleryUpdated }) 
             </form>
           </div>
         </div>
+      )}
+
+      {/* Bulk Media Importer Modal */}
+      {isBulkImportOpen && (
+        <BulkMediaImporter
+          branches={branches}
+          onImportComplete={handleBulkImportComplete}
+          onClose={() => setIsBulkImportOpen(false)}
+        />
       )}
     </div>
   );
