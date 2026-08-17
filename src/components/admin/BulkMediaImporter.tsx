@@ -23,6 +23,7 @@ import {
 } from 'lucide-react';
 import { GalleryItem, EventType, Branch } from '../../types';
 import { optimizeImageFile, optimizeVideoFile, cleanMediaUrl } from '../../utils/imageOptimizer';
+import { SupabaseService } from '../../services/supabase';
 
 interface StagedMediaItem {
   id: string;
@@ -148,20 +149,34 @@ export const BulkMediaImporter: React.FC<BulkMediaImporterProps> = ({
           let origSize = file.size;
           let compSize = file.size;
 
+          // Attempt direct Supabase Storage upload for worldwide CDN URL
+          const cloudUrl = await SupabaseService.uploadMediaFile(file, file.name);
+
           if (isImage) {
             detectedType = 'photo';
-            const opt = await optimizeImageFile(file, { maxWidth: 1600, maxHeight: 1600, quality: 0.82 });
-            optimizedMediaUrl = opt.mediaUrl;
-            optimizedThumbnail = opt.thumbnailUrl;
-            origSize = opt.originalSize;
-            compSize = opt.compressedSize;
+            if (cloudUrl) {
+              optimizedMediaUrl = cloudUrl;
+              optimizedThumbnail = cloudUrl;
+            } else {
+              const opt = await optimizeImageFile(file, { maxWidth: 1600, maxHeight: 1600, quality: 0.82 });
+              optimizedMediaUrl = opt.mediaUrl;
+              optimizedThumbnail = opt.thumbnailUrl;
+              origSize = opt.originalSize;
+              compSize = opt.compressedSize;
+            }
           } else {
-            const opt = await optimizeVideoFile(file);
-            optimizedMediaUrl = opt.mediaUrl;
-            optimizedThumbnail = opt.thumbnailUrl;
-            detectedType = opt.mediaType;
-            origSize = opt.originalSize;
-            compSize = opt.compressedSize;
+            if (cloudUrl) {
+              optimizedMediaUrl = cloudUrl;
+              optimizedThumbnail = cloudUrl;
+              detectedType = file.name.toLowerCase().includes('reel') || file.name.toLowerCase().includes('short') ? 'reel' : 'video';
+            } else {
+              const opt = await optimizeVideoFile(file);
+              optimizedMediaUrl = opt.mediaUrl;
+              optimizedThumbnail = opt.thumbnailUrl;
+              detectedType = opt.mediaType;
+              origSize = opt.originalSize;
+              compSize = opt.compressedSize;
+            }
           }
 
           if (defaultMediaType !== 'auto') {

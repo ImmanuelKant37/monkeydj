@@ -121,8 +121,26 @@ export function App() {
       setServices([...updatedList]);
     };
 
+    const handleTestimonialsUpdated = (e: any) => {
+      const updatedList = e.detail || AppStorage.getTestimonials();
+      setTestimonials([...updatedList]);
+    };
+
+    const handleSiteContentUpdated = (e: any) => {
+      const updatedContent = e.detail || AppStorage.getSiteContent();
+      setSiteContent({ ...updatedContent });
+    };
+
+    const handleBranchesUpdated = (e: any) => {
+      const updatedBranches = e.detail || AppStorage.getBranches();
+      setBranches([...updatedBranches]);
+    };
+
     window.addEventListener('monkeydj_gallery_updated', handleGalleryUpdated);
     window.addEventListener('monkeydj_services_updated', handleServicesUpdated);
+    window.addEventListener('monkeydj_testimonials_updated', handleTestimonialsUpdated);
+    window.addEventListener('monkeydj_site_content_updated', handleSiteContentUpdated);
+    window.addEventListener('monkeydj_branches_updated', handleBranchesUpdated);
 
     // Listen to Supabase OAuth changes (sync user state without forcing screen change)
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
@@ -150,6 +168,9 @@ export function App() {
       subscription.unsubscribe();
       window.removeEventListener('monkeydj_gallery_updated', handleGalleryUpdated);
       window.removeEventListener('monkeydj_services_updated', handleServicesUpdated);
+      window.removeEventListener('monkeydj_testimonials_updated', handleTestimonialsUpdated);
+      window.removeEventListener('monkeydj_site_content_updated', handleSiteContentUpdated);
+      window.removeEventListener('monkeydj_branches_updated', handleBranchesUpdated);
     };
   }, []);
 

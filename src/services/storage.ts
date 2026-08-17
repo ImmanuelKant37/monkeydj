@@ -115,7 +115,7 @@ export class AppStorage {
       setItem(STORAGE_KEYS.BRANCHES, INITIAL_BRANCHES);
     }
 
-    // Load asynchronous high-capacity data from IndexedDB into memory cache
+    // 1. Load asynchronous high-capacity data from local IndexedDB into memory cache first
     idbGet<GalleryItem[]>(STORAGE_KEYS.GALLERY).then((idbGallery) => {
       if (idbGallery && Array.isArray(idbGallery) && idbGallery.length > 0) {
         memoryCache[STORAGE_KEYS.GALLERY] = idbGallery;
@@ -129,19 +129,76 @@ export class AppStorage {
         window.dispatchEvent(new CustomEvent('monkeydj_services_updated', { detail: idbServices }));
       }
     });
+
+    // 2. Fetch latest data from Supabase Cloud Database (for cross-browser / multi-device synchronization)
+    SupabaseService.syncGallery().then((cloudGallery) => {
+      if (cloudGallery && Array.isArray(cloudGallery) && cloudGallery.length > 0) {
+        memoryCache[STORAGE_KEYS.GALLERY] = cloudGallery;
+        idbSet(STORAGE_KEYS.GALLERY, cloudGallery).catch(() => {});
+        try {
+          localStorage.setItem(STORAGE_KEYS.GALLERY, JSON.stringify(cloudGallery));
+        } catch {}
+        window.dispatchEvent(new CustomEvent('monkeydj_gallery_updated', { detail: cloudGallery }));
+      }
+    });
+
+    SupabaseService.syncServices().then((cloudServices) => {
+      if (cloudServices && Array.isArray(cloudServices) && cloudServices.length > 0) {
+        memoryCache[STORAGE_KEYS.SERVICES] = cloudServices;
+        idbSet(STORAGE_KEYS.SERVICES, cloudServices).catch(() => {});
+        try {
+          localStorage.setItem(STORAGE_KEYS.SERVICES, JSON.stringify(cloudServices));
+        } catch {}
+        window.dispatchEvent(new CustomEvent('monkeydj_services_updated', { detail: cloudServices }));
+      }
+    });
+
+    SupabaseService.syncTestimonials().then((cloudTestimonials) => {
+      if (cloudTestimonials && Array.isArray(cloudTestimonials) && cloudTestimonials.length > 0) {
+        memoryCache[STORAGE_KEYS.TESTIMONIALS] = cloudTestimonials;
+        try {
+          localStorage.setItem(STORAGE_KEYS.TESTIMONIALS, JSON.stringify(cloudTestimonials));
+        } catch {}
+        window.dispatchEvent(new CustomEvent('monkeydj_testimonials_updated', { detail: cloudTestimonials }));
+      }
+    });
+
+    SupabaseService.syncSiteContent().then((cloudContent) => {
+      if (cloudContent && typeof cloudContent === 'object') {
+        memoryCache[STORAGE_KEYS.SITE_CONTENT] = cloudContent;
+        try {
+          localStorage.setItem(STORAGE_KEYS.SITE_CONTENT, JSON.stringify(cloudContent));
+        } catch {}
+        window.dispatchEvent(new CustomEvent('monkeydj_site_content_updated', { detail: cloudContent }));
+      }
+    });
+
+    SupabaseService.syncBranches().then((cloudBranches) => {
+      if (cloudBranches && Array.isArray(cloudBranches) && cloudBranches.length > 0) {
+        memoryCache[STORAGE_KEYS.BRANCHES] = cloudBranches;
+        try {
+          localStorage.setItem(STORAGE_KEYS.BRANCHES, JSON.stringify(cloudBranches));
+        } catch {}
+        window.dispatchEvent(new CustomEvent('monkeydj_branches_updated', { detail: cloudBranches }));
+      }
+    });
   }
 
   static clearGallery(): void {
     memoryCache[STORAGE_KEYS.GALLERY] = [];
     setItem(STORAGE_KEYS.GALLERY, []);
     idbRemove(STORAGE_KEYS.GALLERY).catch(() => {});
+    SupabaseService.saveGallery([]);
     window.dispatchEvent(new CustomEvent('monkeydj_gallery_updated', { detail: [] }));
     this.addAuditLog('Admin', 'Galería Vaciada', 'Se eliminaron todas las fotos y videos');
   }
 
   static clearServices(): void {
+    memoryCache[STORAGE_KEYS.SERVICES] = [];
     setItem(STORAGE_KEYS.SERVICES, []);
-    SupabaseService.saveEntity('services', STORAGE_KEYS.SERVICES, []);
+    idbRemove(STORAGE_KEYS.SERVICES).catch(() => {});
+    SupabaseService.saveServices([]);
+    window.dispatchEvent(new CustomEvent('monkeydj_services_updated', { detail: [] }));
     this.addAuditLog('Admin', 'Catálogo de Servicios Vaciado', 'Se eliminaron todos los servicios');
   }
 
@@ -154,7 +211,7 @@ export class AppStorage {
   }
   static saveBranches(data: Branch[]): void {
     setItem(STORAGE_KEYS.BRANCHES, data);
-    SupabaseService.saveEntity('branches', STORAGE_KEYS.BRANCHES, data);
+    SupabaseService.saveBranches(data);
     this.addAuditLog('Sistema', 'Actualización de Sucursales', `${data.length} sucursales en total`);
   }
 
@@ -163,7 +220,10 @@ export class AppStorage {
   }
   static saveServices(data: ServiceItem[]): void {
     setItem(STORAGE_KEYS.SERVICES, data);
-    SupabaseService.saveEntity('services', STORAGE_KEYS.SERVICES, data);
+    SupabaseService.saveServices(data);
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('monkeydj_services_updated', { detail: data }));
+    }
     this.addAuditLog('Admin', 'Actualización de Catálogo de Servicios', `${data.length} servicios`);
   }
 
@@ -202,6 +262,10 @@ export class AppStorage {
   }
   static saveTestimonials(data: Testimonial[]): void {
     setItem(STORAGE_KEYS.TESTIMONIALS, data);
+    SupabaseService.saveTestimonials(data);
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('monkeydj_testimonials_updated', { detail: data }));
+    }
   }
 
   static getGallery(): GalleryItem[] {
@@ -209,6 +273,7 @@ export class AppStorage {
   }
   static saveGallery(data: GalleryItem[]): void {
     setItem(STORAGE_KEYS.GALLERY, data);
+    SupabaseService.saveGallery(data);
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new CustomEvent('monkeydj_gallery_updated', { detail: data }));
     }
@@ -358,6 +423,10 @@ export class AppStorage {
 
   static saveSiteContent(data: SiteContent): void {
     setItem(STORAGE_KEYS.SITE_CONTENT, data);
+    SupabaseService.saveSiteContent(data);
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('monkeydj_site_content_updated', { detail: data }));
+    }
     this.addAuditLog('Sistema', 'Actualización de Textos Landing Page', 'Textos e itinerarios de portada actualizados');
   }
 }

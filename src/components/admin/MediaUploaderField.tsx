@@ -12,6 +12,7 @@ import {
   ExternalLink
 } from 'lucide-react';
 import { optimizeImageFile, optimizeVideoFile, cleanMediaUrl } from '../../utils/imageOptimizer';
+import { SupabaseService } from '../../services/supabase';
 
 interface MediaUploaderFieldProps {
   label: string;
@@ -54,17 +55,27 @@ export const MediaUploaderField: React.FC<MediaUploaderFieldProps> = ({
     setStatusMessage('Optimizando y procesando archivo...');
 
     try {
+      const cloudUrl = await SupabaseService.uploadMediaFile(file, file.name);
+
       if (file.type.startsWith('video/') && allowVideo) {
-        const opt = await optimizeVideoFile(file);
-        onChange(opt.mediaUrl, opt.thumbnailUrl, opt.mediaType);
+        if (cloudUrl) {
+          onChange(cloudUrl, cloudUrl, 'video');
+        } else {
+          const opt = await optimizeVideoFile(file);
+          onChange(opt.mediaUrl, opt.thumbnailUrl, opt.mediaType);
+        }
         setStatusMessage('Video cargado correctamente');
       } else {
-        const opt = await optimizeImageFile(file, {
-          maxWidth: maxDimension,
-          maxHeight: maxDimension,
-          quality: 0.82
-        });
-        onChange(opt.mediaUrl, opt.thumbnailUrl || opt.mediaUrl, 'photo');
+        if (cloudUrl) {
+          onChange(cloudUrl, cloudUrl, 'photo');
+        } else {
+          const opt = await optimizeImageFile(file, {
+            maxWidth: maxDimension,
+            maxHeight: maxDimension,
+            quality: 0.82
+          });
+          onChange(opt.mediaUrl, opt.thumbnailUrl || opt.mediaUrl, 'photo');
+        }
         setStatusMessage('¡Foto cargada y optimizada!');
       }
       setTimeout(() => setStatusMessage(null), 3000);

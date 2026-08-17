@@ -7,7 +7,10 @@ import {
   EventRecord,
   Equipment,
   Coupon,
-  QuoteResult
+  QuoteResult,
+  GalleryItem,
+  Testimonial,
+  SiteContent
 } from '../types';
 
 const SUPABASE_URL = (import.meta as any).env?.VITE_SUPABASE_URL || 'https://eslnyswrhmrnijtzdqis.supabase.co';
@@ -53,6 +56,41 @@ export const SUPER_ADMIN_EMAILS = [
 ];
 
 export class SupabaseService {
+  // --- MEDIA / STORAGE UPLOAD ---
+
+  /**
+   * Uploads an image or video file directly to Supabase Cloud Storage.
+   * Returns the permanent public CDN URL if successful, or null if storage bucket is not available.
+   */
+  static async uploadMediaFile(file: File | Blob, fileName?: string): Promise<string | null> {
+    try {
+      const ext = fileName?.split('.').pop() || (file.type.includes('png') ? 'png' : file.type.includes('mp4') ? 'mp4' : 'jpg');
+      const cleanName = `${Date.now()}_${Math.random().toString(36).substring(2, 9)}.${ext}`;
+      
+      const candidateBuckets = ['media', 'gallery', 'public', 'uploads', 'assets'];
+      for (const bucket of candidateBuckets) {
+        try {
+          const { data, error } = await supabase.storage.from(bucket).upload(cleanName, file, {
+            cacheControl: '3600',
+            upsert: true
+          });
+          if (!error && data?.path) {
+            const { data: pub } = supabase.storage.from(bucket).getPublicUrl(data.path);
+            if (pub?.publicUrl) {
+              return pub.publicUrl;
+            }
+          }
+        } catch {
+          // Try next bucket
+        }
+      }
+      return null;
+    } catch (err) {
+      console.warn('Supabase storage upload fallback:', err);
+      return null;
+    }
+  }
+
   // --- AUTHENTICATION ---
 
   static async signInWithGoogle() {
@@ -168,6 +206,166 @@ export class SupabaseService {
     const roles = await this.getUserRoles();
     const match = roles.find((r) => r.email.toLowerCase() === cleanEmail);
     return match ? match.role === 'admin' : false;
+  }
+
+  // --- GALLERY SYNC (MULTI-BROWSER CLOUD DATABASE) ---
+
+  static async syncGallery(): Promise<GalleryItem[] | null> {
+    try {
+      // 1. Try dedicated gallery table
+      const { data, error } = await supabase.from('gallery').select('*');
+      if (!error && data && Array.isArray(data) && data.length > 0) {
+        return data as GalleryItem[];
+      }
+      // 2. Try generic app_content / app_config table fallback
+      const { data: configData } = await supabase.from('app_config').select('*').eq('key', 'gallery').maybeSingle();
+      if (configData?.value && Array.isArray(configData.value) && configData.value.length > 0) {
+        return configData.value as GalleryItem[];
+      }
+    } catch (err) {
+      console.warn('Supabase gallery sync note:', err);
+    }
+    return null;
+  }
+
+  static async saveGallery(items: GalleryItem[]): Promise<void> {
+    try {
+      // 1. Save to dedicated table if present
+      if (items.length > 0) {
+        await supabase.from('gallery').upsert(items as any[], { onConflict: 'id' });
+      }
+    } catch (err) {
+      // Fallback
+    }
+
+    try {
+      // 2. Also backup to app_config table for universal cross-browser storage
+      await supabase.from('app_config').upsert([
+        { key: 'gallery', value: items, updated_at: new Date().toISOString() }
+      ], { onConflict: 'key' });
+    } catch (err) {
+      console.warn('Supabase gallery cloud backup note:', err);
+    }
+  }
+
+  static async deleteGalleryItem(id: string): Promise<void> {
+    try {
+      await supabase.from('gallery').delete().eq('id', id);
+    } catch {}
+  }
+
+  // --- SERVICES SYNC ---
+
+  static async syncServices(): Promise<ServiceItem[] | null> {
+    try {
+      const { data, error } = await supabase.from('services').select('*');
+      if (!error && data && Array.isArray(data) && data.length > 0) {
+        return data as ServiceItem[];
+      }
+      const { data: configData } = await supabase.from('app_config').select('*').eq('key', 'services').maybeSingle();
+      if (configData?.value && Array.isArray(configData.value) && configData.value.length > 0) {
+        return configData.value as ServiceItem[];
+      }
+    } catch {}
+    return null;
+  }
+
+  static async saveServices(items: ServiceItem[]): Promise<void> {
+    try {
+      if (items.length > 0) {
+        await supabase.from('services').upsert(items as any[], { onConflict: 'id' });
+      }
+    } catch {}
+    try {
+      await supabase.from('app_config').upsert([
+        { key: 'services', value: items, updated_at: new Date().toISOString() }
+      ], { onConflict: 'key' });
+    } catch {}
+  }
+
+  // --- TESTIMONIALS SYNC ---
+
+  static async syncTestimonials(): Promise<Testimonial[] | null> {
+    try {
+      const { data, error } = await supabase.from('testimonials').select('*');
+      if (!error && data && Array.isArray(data) && data.length > 0) {
+        return data as Testimonial[];
+      }
+      const { data: configData } = await supabase.from('app_config').select('*').eq('key', 'testimonials').maybeSingle();
+      if (configData?.value && Array.isArray(configData.value) && configData.value.length > 0) {
+        return configData.value as Testimonial[];
+      }
+    } catch {}
+    return null;
+  }
+
+  static async saveTestimonials(items: Testimonial[]): Promise<void> {
+    try {
+      if (items.length > 0) {
+        await supabase.from('testimonials').upsert(items as any[], { onConflict: 'id' });
+      }
+    } catch {}
+    try {
+      await supabase.from('app_config').upsert([
+        { key: 'testimonials', value: items, updated_at: new Date().toISOString() }
+      ], { onConflict: 'key' });
+    } catch {}
+  }
+
+  // --- SITE CONTENT SYNC ---
+
+  static async syncSiteContent(): Promise<SiteContent | null> {
+    try {
+      const { data, error } = await supabase.from('site_content').select('*').maybeSingle();
+      if (!error && data && typeof data === 'object') {
+        return data as SiteContent;
+      }
+      const { data: configData } = await supabase.from('app_config').select('*').eq('key', 'site_content').maybeSingle();
+      if (configData?.value && typeof configData.value === 'object') {
+        return configData.value as SiteContent;
+      }
+    } catch {}
+    return null;
+  }
+
+  static async saveSiteContent(content: SiteContent): Promise<void> {
+    try {
+      await supabase.from('site_content').upsert([content], { onConflict: 'id' });
+    } catch {}
+    try {
+      await supabase.from('app_config').upsert([
+        { key: 'site_content', value: content, updated_at: new Date().toISOString() }
+      ], { onConflict: 'key' });
+    } catch {}
+  }
+
+  // --- BRANCHES SYNC ---
+
+  static async syncBranches(): Promise<Branch[] | null> {
+    try {
+      const { data, error } = await supabase.from('branches').select('*');
+      if (!error && data && Array.isArray(data) && data.length > 0) {
+        return data as Branch[];
+      }
+      const { data: configData } = await supabase.from('app_config').select('*').eq('key', 'branches').maybeSingle();
+      if (configData?.value && Array.isArray(configData.value) && configData.value.length > 0) {
+        return configData.value as Branch[];
+      }
+    } catch {}
+    return null;
+  }
+
+  static async saveBranches(items: Branch[]): Promise<void> {
+    try {
+      if (items.length > 0) {
+        await supabase.from('branches').upsert(items as any[], { onConflict: 'id' });
+      }
+    } catch {}
+    try {
+      await supabase.from('app_config').upsert([
+        { key: 'branches', value: items, updated_at: new Date().toISOString() }
+      ], { onConflict: 'key' });
+    } catch {}
   }
 
   // --- CUSTOMERS & CLIENTS ---
