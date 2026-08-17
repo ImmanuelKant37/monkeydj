@@ -28,12 +28,12 @@ export async function optimizeImageFile(
   } = {}
 ): Promise<OptimizedMediaResult> {
   const {
-    maxWidth = 1600,
-    maxHeight = 1600,
-    quality = 0.82,
-    thumbMaxWidth = 480,
-    thumbMaxHeight = 480,
-    thumbQuality = 0.72
+    maxWidth = 1200,
+    maxHeight = 900,
+    quality = 0.76,
+    thumbMaxWidth = 360,
+    thumbMaxHeight = 360,
+    thumbQuality = 0.65
   } = options;
 
   return new Promise((resolve, reject) => {
@@ -84,29 +84,10 @@ export async function optimizeImageFile(
           // Export compressed main image as JPEG
           const compressedDataUrl = canvas.toDataURL('image/jpeg', quality);
 
-          // 2. Generate small thumbnail
-          let thumbW = img.width;
-          let thumbH = img.height;
-          const thumbRatio = Math.min(thumbMaxWidth / thumbW, thumbMaxHeight / thumbH, 1);
-          thumbW = Math.round(thumbW * thumbRatio);
-          thumbH = Math.round(thumbH * thumbRatio);
-
-          const thumbCanvas = document.createElement('canvas');
-          thumbCanvas.width = thumbW;
-          thumbCanvas.height = thumbH;
-          const thumbCtx = thumbCanvas.getContext('2d');
-
-          let thumbDataUrl = compressedDataUrl;
-          if (thumbCtx) {
-            thumbCtx.imageSmoothingEnabled = true;
-            thumbCtx.imageSmoothingQuality = 'medium';
-            thumbCtx.drawImage(img, 0, 0, thumbW, thumbH);
-            thumbDataUrl = thumbCanvas.toDataURL('image/jpeg', thumbQuality);
-          }
-
+          // For photos, we can use the same optimized URL for thumbnail to avoid duplicating Base64 bytes
           resolve({
             mediaUrl: compressedDataUrl,
-            thumbnailUrl: thumbDataUrl,
+            thumbnailUrl: compressedDataUrl,
             mediaType: 'photo',
             fileName: file.name,
             originalSize: file.size,

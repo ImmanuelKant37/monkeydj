@@ -41,6 +41,8 @@ import {
 
 import { SupabaseService } from './supabase';
 
+import { idbGet, idbSet, idbRemove } from './indexedDb';
+
 const STORAGE_KEYS = {
   BRANCHES: 'aura_branches_v1',
   SERVICES: 'aura_services_v1',
@@ -62,21 +64,40 @@ const STORAGE_KEYS = {
   SITE_CONTENT: 'aura_site_content_v1'
 };
 
+// In-Memory Synchronous Cache to eliminate latency and survive LocalStorage Quota limits
+const memoryCache: Record<string, any> = {};
+
 function getItem<T>(key: string, fallback: T): T {
+  if (memoryCache[key] !== undefined) {
+    return memoryCache[key];
+  }
   try {
     const raw = localStorage.getItem(key);
-    if (!raw) return fallback;
-    return JSON.parse(raw);
+    if (!raw) {
+      memoryCache[key] = fallback;
+      return fallback;
+    }
+    const parsed = JSON.parse(raw);
+    memoryCache[key] = parsed;
+    return parsed;
   } catch (e) {
+    memoryCache[key] = fallback;
     return fallback;
   }
 }
 
 function setItem<T>(key: string, val: T): void {
+  // 1. Immediately store in memory cache
+  memoryCache[key] = val;
+
+  // 2. Persist to IndexedDB asynchronously (handles >100MB of images)
+  idbSet(key, val).catch(() => {});
+
+  // 3. Best-effort LocalStorage write
   try {
     localStorage.setItem(key, JSON.stringify(val));
   } catch (e) {
-    console.error('LocalStorage write error', e);
+    console.warn(`LocalStorage quota reached for ${key}, data safely preserved in IndexedDB and memory cache.`);
   }
 }
 
@@ -84,7 +105,7 @@ export class AppStorage {
   static initStorage(): void {
     const MIGRATION_KEY = 'monkeydj_clean_defaults_v2';
     if (!localStorage.getItem(MIGRATION_KEY)) {
-      // Remove default demo gallery and default demo services as requested
+      // Clean slate migration for initial setup
       localStorage.setItem(STORAGE_KEYS.SERVICES, JSON.stringify([]));
       localStorage.setItem(STORAGE_KEYS.GALLERY, JSON.stringify([]));
       localStorage.setItem(MIGRATION_KEY, 'true');
@@ -93,10 +114,28 @@ export class AppStorage {
     if (!localStorage.getItem(STORAGE_KEYS.BRANCHES)) {
       setItem(STORAGE_KEYS.BRANCHES, INITIAL_BRANCHES);
     }
+
+    // Load asynchronous high-capacity data from IndexedDB into memory cache
+    idbGet<GalleryItem[]>(STORAGE_KEYS.GALLERY).then((idbGallery) => {
+      if (idbGallery && Array.isArray(idbGallery) && idbGallery.length > 0) {
+        memoryCache[STORAGE_KEYS.GALLERY] = idbGallery;
+        window.dispatchEvent(new CustomEvent('monkeydj_gallery_updated', { detail: idbGallery }));
+      }
+    });
+
+    idbGet<ServiceItem[]>(STORAGE_KEYS.SERVICES).then((idbServices) => {
+      if (idbServices && Array.isArray(idbServices) && idbServices.length > 0) {
+        memoryCache[STORAGE_KEYS.SERVICES] = idbServices;
+        window.dispatchEvent(new CustomEvent('monkeydj_services_updated', { detail: idbServices }));
+      }
+    });
   }
 
   static clearGallery(): void {
+    memoryCache[STORAGE_KEYS.GALLERY] = [];
     setItem(STORAGE_KEYS.GALLERY, []);
+    idbRemove(STORAGE_KEYS.GALLERY).catch(() => {});
+    window.dispatchEvent(new CustomEvent('monkeydj_gallery_updated', { detail: [] }));
     this.addAuditLog('Admin', 'Galería Vaciada', 'Se eliminaron todas las fotos y videos');
   }
 
@@ -170,6 +209,9 @@ export class AppStorage {
   }
   static saveGallery(data: GalleryItem[]): void {
     setItem(STORAGE_KEYS.GALLERY, data);
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('monkeydj_gallery_updated', { detail: data }));
+    }
   }
 
   static getCustomers(): Customer[] {

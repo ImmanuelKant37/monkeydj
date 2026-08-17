@@ -51,6 +51,12 @@ export const Hero: React.FC<HeroProps> = ({
   const [isHovered, setIsHovered] = useState<boolean>(false);
   const [activeMediaModal, setActiveMediaModal] = useState<GalleryItem | null>(null);
 
+  useEffect(() => {
+    if (currentIndex >= items.length) {
+      setCurrentIndex(0);
+    }
+  }, [items.length, currentIndex]);
+
   const currentItem: GalleryItem | undefined = items[currentIndex] || items[0];
 
   const nextSlide = useCallback(() => {

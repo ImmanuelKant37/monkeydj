@@ -110,6 +110,20 @@ export function App() {
     setGallery(AppStorage.getGallery());
     setSiteContent(AppStorage.getSiteContent());
 
+    // Listen to custom storage update events for instant reactivity
+    const handleGalleryUpdated = (e: any) => {
+      const updatedList = e.detail || AppStorage.getGallery();
+      setGallery([...updatedList]);
+    };
+
+    const handleServicesUpdated = (e: any) => {
+      const updatedList = e.detail || AppStorage.getServices();
+      setServices([...updatedList]);
+    };
+
+    window.addEventListener('monkeydj_gallery_updated', handleGalleryUpdated);
+    window.addEventListener('monkeydj_services_updated', handleServicesUpdated);
+
     // Listen to Supabase OAuth changes (sync user state without forcing screen change)
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (event === 'SIGNED_OUT' || !session) {
@@ -132,7 +146,11 @@ export function App() {
       }
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      subscription.unsubscribe();
+      window.removeEventListener('monkeydj_gallery_updated', handleGalleryUpdated);
+      window.removeEventListener('monkeydj_services_updated', handleServicesUpdated);
+    };
   }, []);
 
   useEffect(() => {
@@ -192,6 +210,8 @@ export function App() {
     return g.branchId === currentBranch?.id;
   });
 
+  const effectiveGallery = branchGallery.length > 0 ? branchGallery : gallery;
+
   const branchTestimonials = testimonials.filter((t) => {
     if (!t.branchId || t.branchId === 'all' || t.branchId === 'todas') return true;
     return t.branchId === currentBranch?.id;
@@ -233,7 +253,7 @@ export function App() {
             <Hero
               branch={currentBranch}
               siteContent={siteContent}
-              gallery={branchGallery}
+              gallery={effectiveGallery}
               onOpenQuote={() => setQuoteModalOpen(true)}
               onOpenServices={() => {
                 const el = document.getElementById('servicios');

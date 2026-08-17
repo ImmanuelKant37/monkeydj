@@ -67,7 +67,7 @@ export const BulkMediaImporter: React.FC<BulkMediaImporterProps> = ({
   const [defaultBranchId, setDefaultBranchId] = useState<string>('all');
   const [defaultEventTitle, setDefaultEventTitle] = useState<string>('');
   const [defaultTagsText, setDefaultTagsText] = useState<string>('ProduccionLive, MonkeyDJ');
-  const [defaultFeatured, setDefaultFeatured] = useState<boolean>(false);
+  const [defaultFeatured, setDefaultFeatured] = useState<boolean>(true);
   const [defaultMediaType, setDefaultMediaType] = useState<'auto' | 'photo' | 'video' | 'reel'>('auto');
 
   // URL bulk text area
